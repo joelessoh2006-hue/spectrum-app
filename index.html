@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="fr" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Safeguard against preview/extension environments where window.fetch has only a getter
+      (function () {
+        try {
+          var originalFetch = window.fetch;
+          Object.defineProperty(window, 'fetch', {
+            get: function () {
+              return originalFetch;
+            },
+            set: function (val) {
+              originalFetch = val;
+            },
+            configurable: true,
+            enumerable: true,
+          });
+        } catch (_) {
+          try {
+            var proto = Object.getPrototypeOf(window);
+            if (proto) {
+              var pFetch = window.fetch;
+              Object.defineProperty(proto, 'fetch', {
+                get: function () {
+                  return pFetch;
+                },
+                set: function (val) {
+                  pFetch = val;
+                },
+                configurable: true,
+                enumerable: true,
+              });
+            }
+          } catch (__) {}
+        }
+
+        // Catch and prevent unhandled fetch-getter errors from bubbling
+        window.addEventListener(
+          'error',
+          function (event) {
+            if (
+              event &&
+              event.message &&
+              event.message.indexOf('fetch') !== -1 &&
+              event.message.indexOf('only a getter') !== -1
+            ) {
+              event.preventDefault();
+              event.stopImmediatePropagation();
+              return true;
+            }
+          },
+          true
+        );
+      })();
+    </script>
+    <title>Spectrum - Assistant pour esprit multipotentiel</title>
+    <meta name="description" content="Spectrum - Application Flutter Material 3, Cloud Firestore & Provider pour esprits multipotentiels." />
+    <meta property="og:title" content="Spectrum - Assistant pour esprit multipotentiel" />
+    <meta property="og:description" content="Spectrum - Application Flutter Material 3, Cloud Firestore & Provider pour esprits multipotentiels." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-[#121214] text-[#EDEDED] font-['Plus_Jakarta_Sans',sans-serif] antialiased selection:bg-[#6C5CE7]/30 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

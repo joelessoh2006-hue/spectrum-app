@@ -1,0 +1,6 @@
+{
+  "name": "Spectrum",
+  "description": "Assistant pour esprit multipotentiel avec Time-Blocking, fiches d'activités et dashboard projets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
