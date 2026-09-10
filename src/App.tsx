@@ -38,11 +38,18 @@ import {
   CheckCircle2,
   AlertCircle,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 
 export default function App() {
   // Splash & Onboarding State
-  const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [showSplash, setShowSplash] = useState<boolean>(() => {
+    try {
+      return !sessionStorage.getItem('spectrum_splash_shown');
+    } catch {
+      return false;
+    }
+  });
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
 
   // Auth State
@@ -78,12 +85,18 @@ export default function App() {
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
   const [isManagePillarsOpen, setIsManagePillarsOpen] = useState(false);
 
-  // 1. Écoute de l'état d'authentification Firebase
+  // 1. Écoute et restauration automatique de l'état d'authentification Firebase
   useEffect(() => {
-    const unsubscribeAuth = onAuthUserChanged((firebaseUser) => {
-      setUser(firebaseUser);
-      setIsAuthLoading(false);
-    });
+    const unsubscribeAuth = onAuthUserChanged(
+      (firebaseUser) => {
+        setUser(firebaseUser);
+        setIsAuthLoading(false);
+      },
+      (error) => {
+        console.error('Erreur restauration session auth:', error);
+        setIsAuthLoading(false);
+      }
+    );
 
     return () => {
       unsubscribeAuth();
@@ -105,8 +118,14 @@ export default function App() {
 
   // 3. Synchronisation temps réel Cloud Firestore avec scoping users/{userId}/...
   useEffect(() => {
+    // Si l'état auth est toujours en cours de vérification initiale, on attend
+    // pour éviter de repasser prématurément par un état déconnecté ou vidé
+    if (isAuthLoading) {
+      return;
+    }
+
     if (!user) {
-      // Si déconnecté, données locales initiales
+      // Si déconnecté après vérification, réinitialiser
       setTimeBlocks([]);
       setProjects([]);
       setFirestoreStatus('connected');
@@ -398,11 +417,49 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)] font-['Plus_Jakarta_Sans',sans-serif] flex flex-col selection:bg-[#6C5CE7]/30 transition-colors">
-      {/* 1. SplashScreen au chargement initial */}
-      {showSplash && (
+      {/* 0. Indicateur de chargement global pendant la vérification de l'état Auth au démarrage */}
+      {isAuthLoading && (
+        <div
+          id="global-auth-loading-indicator"
+          className="fixed inset-0 z-50 bg-[var(--bg-app)] flex flex-col items-center justify-center p-6 text-[var(--text-primary)] transition-opacity select-none"
+        >
+          <div className="flex flex-col items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
+            {/* Animated branding logo */}
+            <div className="relative w-14 h-14 flex items-center justify-center">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#6C5CE7] via-[#0984E3] to-[#00CEC9] p-[2px] animate-spin shadow-lg shadow-[#6C5CE7]/20">
+                <div className="w-full h-full bg-[var(--bg-surface)] rounded-[14px]" />
+              </div>
+              <Sparkles className="w-6 h-6 text-[#6C5CE7] absolute animate-pulse" />
+            </div>
+
+            <div className="flex flex-col items-center text-center">
+              <h2 className="text-base font-bold text-[var(--text-primary)] tracking-tight">
+                Spectrum
+              </h2>
+              <div className="flex items-center gap-2 mt-2 px-3.5 py-1.5 rounded-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs text-[var(--text-secondary)] shadow-sm">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#6C5CE7]" />
+                <span>Restauration de la session...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 1. SplashScreen au premier chargement de la session */}
+      {!isAuthLoading && showSplash && (
         <SplashScreen
-          onComplete={() => setShowSplash(false)}
-          onFinish={() => setShowSplash(false)}
+          onComplete={() => {
+            setShowSplash(false);
+            try {
+              sessionStorage.setItem('spectrum_splash_shown', 'true');
+            } catch (_) {}
+          }}
+          onFinish={() => {
+            setShowSplash(false);
+            try {
+              sessionStorage.setItem('spectrum_splash_shown', 'true');
+            } catch (_) {}
+          }}
         />
       )}
 

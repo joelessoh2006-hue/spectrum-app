@@ -16,6 +16,8 @@ import {
   onAuthStateChanged,
   User,
   signInAnonymously,
+  setPersistence,
+  browserLocalPersistence,
 } from 'firebase/auth';
 import { TimeBlock, Project, DomainConfig } from '../types';
 
@@ -36,6 +38,12 @@ export const firebaseConfig = {
 export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+
+// Configuration explicite de la persistance locale dans le navigateur
+// pour conserver la session utilisateur à travers les rafraîchissements de page
+setPersistence(auth, browserLocalPersistence).catch((error) => {
+  console.warn('Configuration persistance Firebase Auth (browserLocalPersistence):', error);
+});
 
 // Provider Google Auth
 const googleProvider = new GoogleAuthProvider();
@@ -86,10 +94,11 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 // ----------------------------------------------------------------------
 
 /**
- * Connexion avec Google via Popup
+ * Connexion avec Google via Popup avec persistance locale explicite
  */
 export async function signInWithGoogle(): Promise<User> {
   try {
+    await setPersistence(auth, browserLocalPersistence);
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (error: unknown) {
@@ -100,9 +109,10 @@ export async function signInWithGoogle(): Promise<User> {
 }
 
 /**
- * Connexion invité / anonyme (fallback si environnement iframe strict)
+ * Connexion invité / anonyme avec persistance locale explicite
  */
 export async function signInGuest(): Promise<User> {
+  await setPersistence(auth, browserLocalPersistence);
   const result = await signInAnonymously(auth);
   return result.user;
 }
@@ -115,10 +125,13 @@ export async function signOutUser(): Promise<void> {
 }
 
 /**
- * Écoute des changements d'état d'authentification
+ * Écoute des changements d'état d'authentification avec restauration automatique
  */
-export function onAuthUserChanged(callback: (user: User | null) => void): () => void {
-  return onAuthStateChanged(auth, callback);
+export function onAuthUserChanged(
+  onUser: (user: User | null) => void,
+  onError?: (error: Error) => void
+): () => void {
+  return onAuthStateChanged(auth, onUser, onError);
 }
 
 // ----------------------------------------------------------------------
