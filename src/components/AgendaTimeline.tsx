@@ -193,20 +193,50 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
               className="text-xs font-semibold text-[#55E6C1] hover:underline flex items-center gap-1"
             >
               <RotateCcw className="w-3 h-3" />
-              <span>Charger modèles</span>
+              <span>Charger modèles d'exemples</span>
             </button>
           )}
           {blocks.length > 0 && onClearBlocks && (
             <button
               onClick={onClearBlocks}
               className="text-[11px] text-[#71717A] hover:text-[#FF7675] transition-colors"
-              title="Réinitialiser la collection à vide (comme en production)"
+              title="Vider la collection de test"
             >
-              Vider la collection
+              Vider l'agenda
             </button>
           )}
         </div>
       </div>
+
+      {/* Global empty state banner for empty user accounts */}
+      {blocks.length === 0 && (
+        <div className="mb-6 p-6 rounded-3xl bg-[#1E1E24] border border-[#2E2E38] text-center shadow-lg">
+          <div className="w-12 h-12 rounded-2xl bg-[#6C5CE7]/10 text-[#6C5CE7] flex items-center justify-center mx-auto mb-3 border border-[#6C5CE7]/20">
+            <Sparkles className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-white">Espace personnel propre & prêt</h3>
+          <p className="text-xs text-[#A0A0AB] max-w-md mx-auto mt-1 leading-relaxed">
+            Toutes les données de test ont été retirées. Vous pouvez créer vos propres blocs d'hyperfocus ou charger des exemples pour découvrir l'organisation multipotentielle.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={onOpenAddModal}
+              className="px-4 py-2 rounded-xl bg-[#6C5CE7] text-white text-xs font-bold shadow-lg shadow-[#6C5CE7]/20 hover:bg-[#5F27CD] transition active:scale-95 flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Créer mon premier bloc</span>
+            </button>
+            {onSeedTemplates && (
+              <button
+                onClick={onSeedTemplates}
+                className="px-3.5 py-2 rounded-xl bg-[#121214] border border-[#2E2E38] text-[#A0A0AB] hover:text-white text-xs font-medium transition"
+              >
+                Charger des exemples de démarrage
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 3. BLOCS D'ACTIVITÉS RANGÉS PAR CATÉGORIES (Tech, Art/Rap, Curiosité) */}
       <div className="space-y-6">

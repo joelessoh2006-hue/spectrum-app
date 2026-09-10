@@ -19,6 +19,7 @@ interface ProjectsDashboardProps {
   onBackToAgenda: () => void;
   onOpenAddModal: () => void;
   onToggleMilestone: (projectId: string, milestoneId: string) => void;
+  onSeedProjects?: () => void;
 }
 
 export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
@@ -26,6 +27,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
   onBackToAgenda,
   onOpenAddModal,
   onToggleMilestone,
+  onSeedProjects,
 }) => {
   const [pillarFilter, setPillarFilter] = useState<DomainId | 'all'>('all');
 
@@ -185,8 +187,35 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
         })}
       </div>
 
-      {/* 2. BENTO GRID LAYOUT */}
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* 2. BENTO GRID LAYOUT (1 colonne sur mobile, 2-3 colonnes sur tablette/desktop) */}
+      {filteredProjects.length === 0 ? (
+        <div className="mt-6 p-8 rounded-3xl bg-[#1E1E24] border border-dashed border-[#2E2E38] text-center flex flex-col items-center justify-center">
+          <div className="w-12 h-12 rounded-2xl bg-[#55E6C1]/10 text-[#55E6C1] flex items-center justify-center mb-3 border border-[#55E6C1]/20">
+            <Layers className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-white">Aucun projet dans cette vue</h3>
+          <p className="text-xs text-[#A0A0AB] max-w-sm mt-1 leading-relaxed">
+            La Bento Grid permet de visualiser vos chantiers créatifs et techniques sans surcharge cognitive.
+          </p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={onOpenAddModal}
+              className="px-4 py-2 rounded-xl bg-[#55E6C1] text-[#121214] text-xs font-bold shadow-lg shadow-[#55E6C1]/20 hover:bg-[#43d4af] transition active:scale-95"
+            >
+              + Créer un projet
+            </button>
+            {onSeedProjects && (
+              <button
+                onClick={onSeedProjects}
+                className="px-3.5 py-2 rounded-xl bg-[#121214] border border-[#2E2E38] text-[#A0A0AB] hover:text-white text-xs font-medium transition"
+              >
+                Charger des exemples de projets
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredProjects.map((project) => {
           const domainCfg = DOMAINS[project.domain] || DOMAINS.tech;
           const isLarge = project.bentoSize === 'large';
@@ -305,6 +334,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
           );
         })}
       </div>
+      )}
     </div>
   );
 };

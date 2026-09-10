@@ -1,0 +1,36 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Par défaut, refuser tout accès non spécifié
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Collection des blocs de temps de l'utilisateur : users/{userId}/timeblocks/{blockId}
+    match /users/{userId}/timeblocks/{blockId} {
+      allow get, list: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidId(blockId);
+      allow delete: if isOwner(userId) && isValidId(blockId);
+    }
+
+    // Collection des projets Bento Grid de l'utilisateur : users/{userId}/projects/{projectId}
+    match /users/{userId}/projects/{projectId} {
+      allow get, list: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidId(projectId);
+      allow delete: if isOwner(userId) && isValidId(projectId);
+    }
+  }
+}

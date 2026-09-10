@@ -17,16 +17,50 @@ import {
 import confetti from 'canvas-confetti';
 
 interface ActivitySheetProps {
-  block: TimeBlock;
+  block?: TimeBlock | null;
   onBack: () => void;
   onUpdateBlock: (updatedBlock: TimeBlock) => void;
+  onOpenAddModal?: () => void;
 }
 
 export const ActivitySheet: React.FC<ActivitySheetProps> = ({
   block,
   onBack,
   onUpdateBlock,
+  onOpenAddModal,
 }) => {
+  if (!block) {
+    return (
+      <div className="pb-28 max-w-3xl mx-auto px-4 pt-6 text-center">
+        <div className="bg-[#1E1E24] border border-[#2E2E38] rounded-3xl p-8 shadow-xl">
+          <div className="w-12 h-12 rounded-2xl bg-[#6C5CE7]/10 text-[#6C5CE7] flex items-center justify-center mx-auto mb-4 border border-[#6C5CE7]/20">
+            <Sparkles className="w-6 h-6" />
+          </div>
+          <h2 className="text-xl font-bold text-white">Aucune Fiche d'Activité sélectionnée</h2>
+          <p className="text-xs text-[#A0A0AB] mt-2 max-w-md mx-auto leading-relaxed">
+            Pour ouvrir une fiche détaillée avec checklist et notes d'immersion, sélectionnez un bloc dans l'Agenda ou créez-en un nouveau.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={onBack}
+              className="px-4 py-2 rounded-xl bg-[#121214] border border-[#2E2E38] text-xs font-semibold text-white hover:bg-[#25252D] transition"
+            >
+              Retour à l'Agenda
+            </button>
+            {onOpenAddModal && (
+              <button
+                onClick={onOpenAddModal}
+                className="px-4 py-2 rounded-xl bg-[#6C5CE7] text-white text-xs font-semibold hover:bg-[#5F27CD] transition shadow-lg shadow-[#6C5CE7]/20"
+              >
+                + Créer un bloc de temps
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const domainConfig = DOMAINS[block.domain] || DOMAINS.tech;
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [saveStatus, setSaveStatus] = useState<string | null>(null);

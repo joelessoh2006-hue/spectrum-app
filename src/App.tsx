@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { TimeBlock, Project, DomainId } from './types';
-import { INITIAL_TIME_BLOCKS, INITIAL_PROJECTS, DOMAINS } from './data/mockData';
+import { User } from 'firebase/auth';
+import { TimeBlock, Project } from './types';
+import { INITIAL_TIME_BLOCKS, INITIAL_PROJECTS } from './data/mockData';
 import {
-  subscribeToTimeBlocks,
-  subscribeToProjects,
-  saveTimeBlock,
-  saveProject,
-  seedTemplatesToFirestore,
-  clearAllBlocksFromFirestore,
-  firebaseConfig,
+  signInWithGoogle,
+  signInGuest,
+  signOutUser,
+  onAuthUserChanged,
+  subscribeToUserTimeBlocks,
+  subscribeToUserProjects,
+  saveUserTimeBlock,
+  deleteUserTimeBlock,
+  saveUserProject,
+  seedUserTemplates,
+  clearUserTimeBlocks,
 } from './lib/firebase';
 import { SplashScreen } from './components/SplashScreen';
+import { AuthHeader } from './components/AuthHeader';
+import { BottomNavBar, AppView } from './components/BottomNavBar';
+import { OnboardingModal } from './components/OnboardingModal';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { AgendaTimeline } from './components/AgendaTimeline';
 import { ActivitySheet } from './components/ActivitySheet';
 import { ProjectsDashboard } from './components/ProjectsDashboard';
@@ -21,102 +30,163 @@ import {
   Calendar,
   Layers,
   Code2,
-  Sparkles,
-  Smartphone,
-  Play,
-  RotateCcw,
   CheckCircle2,
-  Database,
-  Cloud,
+  AlertCircle,
 } from 'lucide-react';
 
 export default function App() {
-  // Navigation & View state
+  // Splash & Onboarding State
   const [showSplash, setShowSplash] = useState<boolean>(true);
-  const [currentView, setCurrentView] = useState<'agenda' | 'activity' | 'projects' | 'code'>('agenda');
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
+
+  // Auth State
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Navigation State: 'agenda' | 'activity' | 'bento' | 'code'
+  const [currentView, setCurrentView] = useState<AppView>('agenda');
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  // Firestore & Realtime data state
-  const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>(INITIAL_TIME_BLOCKS);
-  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
-  const [isFirestoreConnected, setIsFirestoreConnected] = useState<boolean>(true);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  // Data State (Initialement vide sans données de test par défaut selon la demande)
+  const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [firestoreStatus, setFirestoreStatus] = useState<'connected' | 'error' | 'syncing'>('connected');
 
-  // Modals state
+  // Modals
   const [isAddBlockOpen, setIsAddBlockOpen] = useState(false);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
 
-  // Écoute temps réel Cloud Firestore (onSnapshot) pour TimeBlocks et Projets Bento Grid
+  // 1. Écoute de l'état d'authentification Firebase
   useEffect(() => {
+    const unsubscribeAuth = onAuthUserChanged((firebaseUser) => {
+      setUser(firebaseUser);
+      setIsAuthLoading(false);
+    });
+
+    return () => {
+      unsubscribeAuth();
+    };
+  }, []);
+
+  // 2. Détection du premier lancement pour l'onboarding multipotentiel
+  useEffect(() => {
+    try {
+      const hasCompleted = localStorage.getItem('spectrum_onboarding_v1');
+      if (!hasCompleted) {
+        // Déclencher après la fin du splash screen
+        const timer = setTimeout(() => {
+          setShowOnboarding(true);
+        }, 1200);
+        return () => clearTimeout(timer);
+      }
+    } catch (_) {}
+  }, []);
+
+  // 3. Synchronisation temps réel Cloud Firestore avec scoping users/{userId}/...
+  useEffect(() => {
+    if (!user) {
+      // Si déconnecté, données locales vides
+      setTimeBlocks([]);
+      setProjects([]);
+      setFirestoreStatus('connected');
+      return;
+    }
+
+    setFirestoreStatus('syncing');
     let unsubscribeBlocks: (() => void) | undefined;
     let unsubscribeProjects: (() => void) | undefined;
 
     try {
-      unsubscribeBlocks = subscribeToTimeBlocks(
-        (remoteBlocks, isFirst) => {
-          setIsFirestoreConnected(true);
-          if (remoteBlocks.length > 0) {
-            setTimeBlocks(remoteBlocks);
-          } else if (isFirst) {
-            // Premier chargement si la collection Firestore est vide : peupler avec les modèles
-            seedTemplatesToFirestore(INITIAL_TIME_BLOCKS, INITIAL_PROJECTS).catch((err) => {
-              console.warn('Auto-seed initial notice:', err);
-            });
-            setTimeBlocks(INITIAL_TIME_BLOCKS);
-          } else {
-            setTimeBlocks([]);
-          }
+      unsubscribeBlocks = subscribeToUserTimeBlocks(
+        user.uid,
+        (remoteBlocks) => {
+          setTimeBlocks(remoteBlocks);
+          setFirestoreStatus('connected');
         },
         (err) => {
-          console.warn('Erreur Firestore onSnapshot (time_blocks):', err);
-          setIsFirestoreConnected(false);
+          console.warn('Erreur écoute blocs utilisateur:', err);
+          setFirestoreStatus('error');
         }
       );
 
-      unsubscribeProjects = subscribeToProjects(
-        (remoteProjects, isFirst) => {
-          setIsFirestoreConnected(true);
-          if (remoteProjects.length > 0) {
-            setProjects(remoteProjects);
-          } else if (isFirst) {
-            setProjects(INITIAL_PROJECTS);
-          } else {
-            setProjects([]);
-          }
+      unsubscribeProjects = subscribeToUserProjects(
+        user.uid,
+        (remoteProjects) => {
+          setProjects(remoteProjects);
+          setFirestoreStatus('connected');
         },
         (err) => {
-          console.warn('Erreur Firestore onSnapshot (projects):', err);
-          setIsFirestoreConnected(false);
+          console.warn('Erreur écoute projets utilisateur:', err);
+          setFirestoreStatus('error');
         }
       );
-    } catch (e) {
-      console.error('Erreur initialisation listeners Firestore:', e);
-      setIsFirestoreConnected(false);
+    } catch (err) {
+      console.error('Erreur attachement Firestore listeners:', err);
+      setFirestoreStatus('error');
     }
 
     return () => {
       unsubscribeBlocks?.();
       unsubscribeProjects?.();
     };
-  }, []);
+  }, [user]);
 
-  // Handlers Firestore réactifs
+  // Auth Handlers
+  const handleLoginWithGoogle = async () => {
+    setAuthError(null);
+    try {
+      await signInWithGoogle();
+    } catch (err: unknown) {
+      console.warn('Google Sign-In popup error:', err);
+      // Détecter si les popups sont bloqués par l'environnement
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes('popup-blocked') || message.includes('cancelled')) {
+        setAuthError('La fenêtre de connexion Google a été fermée ou bloquée par le navigateur.');
+      } else {
+        setAuthError('Connexion Google échouée. Vous pouvez également tester en mode Invité.');
+      }
+    }
+  };
+
+  const handleLoginGuest = async () => {
+    setAuthError(null);
+    try {
+      await signInGuest();
+    } catch (err) {
+      console.error('Guest login error:', err);
+      setAuthError('Impossible de démarrer la session invité.');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOutUser();
+      setSelectedBlockId(null);
+      setCurrentView('agenda');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+  };
+
+  // CRUD TimeBlocks
   const handleSelectBlock = (blockId: string) => {
     setSelectedBlockId(blockId);
     setCurrentView('activity');
   };
 
   const handleUpdateBlock = async (updated: TimeBlock) => {
-    // Mise à jour optimiste locale immédiate
     setTimeBlocks((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
-    setIsSyncing(true);
-    try {
-      await saveTimeBlock(updated);
-    } catch (err) {
-      console.error('Erreur setDoc Firestore (block):', err);
-    } finally {
-      setIsSyncing(false);
+    if (user) {
+      setFirestoreStatus('syncing');
+      try {
+        await saveUserTimeBlock(user.uid, updated);
+        setFirestoreStatus('connected');
+      } catch (err) {
+        console.error('Erreur sauvegarde bloc Firestore:', err);
+        setFirestoreStatus('error');
+      }
     }
   };
 
@@ -126,29 +196,52 @@ export default function App() {
       id: `block-${Date.now()}`,
     };
     setTimeBlocks((prev) => [...prev, newBlock]);
-    setIsSyncing(true);
-    try {
-      await saveTimeBlock(newBlock);
-    } catch (err) {
-      console.error('Erreur setDoc Firestore (new block):', err);
-    } finally {
-      setIsSyncing(false);
+
+    if (user) {
+      setFirestoreStatus('syncing');
+      try {
+        await saveUserTimeBlock(user.uid, newBlock);
+        setFirestoreStatus('connected');
+      } catch (err) {
+        console.error('Erreur création bloc Firestore:', err);
+        setFirestoreStatus('error');
+      }
     }
   };
 
+  const handleClearBlocks = async () => {
+    if (user) {
+      setFirestoreStatus('syncing');
+      try {
+        await clearUserTimeBlocks(user.uid, timeBlocks);
+        setTimeBlocks([]);
+        setFirestoreStatus('connected');
+      } catch (err) {
+        console.error('Erreur vidage blocs Firestore:', err);
+        setFirestoreStatus('error');
+      }
+    } else {
+      setTimeBlocks([]);
+    }
+  };
+
+  // CRUD Projects
   const handleAddProject = async (newProjectData: Omit<Project, 'id'>) => {
     const newProj: Project = {
       ...newProjectData,
       id: `proj-${Date.now()}`,
     };
     setProjects((prev) => [newProj, ...prev]);
-    setIsSyncing(true);
-    try {
-      await saveProject(newProj);
-    } catch (err) {
-      console.error('Erreur setDoc Firestore (new project):', err);
-    } finally {
-      setIsSyncing(false);
+
+    if (user) {
+      setFirestoreStatus('syncing');
+      try {
+        await saveUserProject(user.uid, newProj);
+        setFirestoreStatus('connected');
+      } catch (err) {
+        console.error('Erreur création projet Firestore:', err);
+        setFirestoreStatus('error');
+      }
     }
   };
 
@@ -172,46 +265,43 @@ export default function App() {
     };
 
     setProjects((prev) => prev.map((p) => (p.id === projectId ? updatedProject : p)));
-    setIsSyncing(true);
-    try {
-      await saveProject(updatedProject);
-    } catch (err) {
-      console.error('Erreur setDoc Firestore (milestone):', err);
-    } finally {
-      setIsSyncing(false);
+
+    if (user) {
+      setFirestoreStatus('syncing');
+      try {
+        await saveUserProject(user.uid, updatedProject);
+        setFirestoreStatus('connected');
+      } catch (err) {
+        console.error('Erreur mise à jour milestone Firestore:', err);
+        setFirestoreStatus('error');
+      }
     }
   };
 
-  const handleClearBlocks = async () => {
-    setIsSyncing(true);
-    try {
-      await clearAllBlocksFromFirestore(timeBlocks);
-      setTimeBlocks([]);
-    } catch (err) {
-      console.error('Erreur clear Firestore:', err);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
+  // Amorçage volontaire par l'utilisateur (si demandé)
   const handleSeedTemplates = async () => {
-    setIsSyncing(true);
-    try {
-      await seedTemplatesToFirestore(INITIAL_TIME_BLOCKS, INITIAL_PROJECTS);
+    if (user) {
+      setFirestoreStatus('syncing');
+      try {
+        await seedUserTemplates(user.uid, INITIAL_TIME_BLOCKS, INITIAL_PROJECTS);
+        setTimeBlocks(INITIAL_TIME_BLOCKS);
+        setProjects(INITIAL_PROJECTS);
+        setFirestoreStatus('connected');
+      } catch (err) {
+        console.error('Erreur seeding modèles utilisateur:', err);
+        setFirestoreStatus('error');
+      }
+    } else {
       setTimeBlocks(INITIAL_TIME_BLOCKS);
       setProjects(INITIAL_PROJECTS);
-    } catch (err) {
-      console.error('Erreur seeding Firestore:', err);
-    } finally {
-      setIsSyncing(false);
     }
   };
 
-  const activeBlock = timeBlocks.find((b) => b.id === selectedBlockId) || timeBlocks[0];
+  const activeBlock = timeBlocks.find((b) => b.id === selectedBlockId) || (timeBlocks.length > 0 ? timeBlocks[0] : null);
 
   return (
     <div className="min-h-screen bg-[#121214] text-[#EDEDED] font-['Plus_Jakarta_Sans',sans-serif] flex flex-col selection:bg-[#6C5CE7]/30">
-      {/* 1. Splash Screen Overlay if active */}
+      {/* 1. Splash Screen Overlay au lancement */}
       {showSplash && (
         <SplashScreen
           onComplete={() => {
@@ -220,147 +310,128 @@ export default function App() {
         />
       )}
 
-      {/* 2. Top Application Bar */}
-      <header className="sticky top-0 z-30 bg-[#17171B]/90 backdrop-blur-md border-b border-[#2E2E38] px-4 py-2.5">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
-          {/* Logo & Tagline */}
-          <div
-            onClick={() => {
-              setCurrentView('agenda');
-              setSelectedBlockId(null);
-            }}
-            className="flex items-center gap-3 cursor-pointer group"
-          >
-            <div className="relative w-8 h-8 rounded-xl bg-gradient-to-tr from-[#6C5CE7] via-[#55E6C1] to-[#FF7675] p-[1.5px] shadow-lg shadow-[#6C5CE7]/20 group-hover:scale-105 transition-transform">
-              <div className="w-full h-full bg-[#121214] rounded-[10px] flex items-center justify-center">
-                <span className="text-sm font-black text-transparent bg-clip-text bg-gradient-to-r from-[#6C5CE7] to-[#55E6C1]">
-                  ∞
-                </span>
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-base font-extrabold tracking-tight text-white group-hover:text-[#55E6C1] transition-colors">
-                  Spectrum
-                </span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1E1E24] border border-[#2E2E38] text-[#55E6C1] font-semibold">
-                  Flutter M3
-                </span>
-              </div>
-              <span className="text-[11px] text-[#A0A0AB] hidden sm:inline">
-                Assistant pour esprit multipotentiel
-              </span>
-            </div>
-          </div>
+      {/* 2. En-tête avec Authentification Google, Statut PWA & Sync */}
+      <AuthHeader
+        user={user}
+        isAuthLoading={isAuthLoading}
+        onLoginWithGoogle={handleLoginWithGoogle}
+        onLoginGuest={handleLoginGuest}
+        onLogout={handleLogout}
+        onOpenOnboarding={() => setShowOnboarding(true)}
+        firestoreStatus={firestoreStatus}
+      />
 
-          {/* Firestore Connection Badge */}
-          <div
-            title={`Projet Firebase: ${firebaseConfig.projectId}`}
-            className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-xl bg-[#1E1E24] border border-[#2E2E38] text-[11px]"
-          >
-            <span className="relative flex h-2 w-2">
-              {isFirestoreConnected && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#55E6C1] opacity-75" />
-              )}
-              <span
-                className={`relative inline-flex rounded-full h-2 w-2 ${
-                  isFirestoreConnected ? 'bg-[#55E6C1]' : 'bg-[#FF7675]'
-                }`}
-              />
-            </span>
-            <span className="font-mono text-[#A0A0AB]">
-              Firestore: <span className="text-white font-semibold">{firebaseConfig.projectId}</span>
-            </span>
-            {isSyncing ? (
-              <span className="text-[#55E6C1] animate-pulse text-[10px] font-mono">• sync...</span>
-            ) : (
-              <span className="text-[#55E6C1] text-[10px] font-mono">live</span>
-            )}
+      {/* 3. Bannière d'erreur d'authentification le cas échéant */}
+      {authError && (
+        <div className="bg-[#2D1B1B] border-b border-[#FF7675]/30 px-4 py-2 text-xs text-[#FF7675] flex items-center justify-between">
+          <div className="flex items-center gap-2 max-w-2xl">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{authError}</span>
           </div>
-
-          {/* Navigation Controls */}
-          <nav className="flex items-center gap-1.5 bg-[#121214] p-1 rounded-2xl border border-[#2E2E38]">
+          <div className="flex items-center gap-2">
             <button
-              id="nav-agenda-btn"
-              onClick={() => {
-                setCurrentView('agenda');
-              }}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              onClick={handleLoginGuest}
+              className="text-[11px] underline hover:text-white"
+            >
+              Session invité
+            </button>
+            <button
+              onClick={() => setAuthError(null)}
+              className="text-[11px] px-2 py-0.5 rounded bg-[#18181B] text-[#EDEDED]"
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Navigation Desktop / Tablette (cachée sur smartphone grâce à la BottomNavBar) */}
+      <div className="hidden md:block bg-[#18181B] border-b border-[#27272A] px-4 py-2">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              id="desktop-nav-agenda"
+              onClick={() => setCurrentView('agenda')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                 currentView === 'agenda'
-                  ? 'bg-[#1E1E24] text-white shadow-sm border border-[#2E2E38]'
-                  : 'text-[#A0A0AB] hover:text-white hover:bg-[#1E1E24]/50'
+                  ? 'bg-[#121214] text-white border border-[#3E3E4A] shadow-sm'
+                  : 'text-[#A0A0AB] hover:text-white hover:bg-[#1E1E24]'
               }`}
             >
               <Calendar className="w-3.5 h-3.5 text-[#6C5CE7]" />
-              <span className="hidden md:inline">1. Agenda (Timeline)</span>
-              <span className="md:hidden">Agenda</span>
+              <span>Agenda Time-Blocking</span>
             </button>
 
             <button
-              id="nav-activity-btn"
-              onClick={() => {
-                if (!selectedBlockId && timeBlocks.length > 0) {
-                  setSelectedBlockId(timeBlocks[0].id);
-                }
-                setCurrentView('activity');
-              }}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                currentView === 'activity'
-                  ? 'bg-[#1E1E24] text-white shadow-sm border border-[#2E2E38]'
-                  : 'text-[#A0A0AB] hover:text-white hover:bg-[#1E1E24]/50'
-              }`}
-            >
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#FF7675]" />
-              <span className="hidden md:inline">2. Fiche d'Activité</span>
-              <span className="md:hidden">Activité</span>
-            </button>
-
-            <button
-              id="nav-projects-btn"
-              onClick={() => {
-                setCurrentView('projects');
-              }}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                currentView === 'projects'
-                  ? 'bg-[#1E1E24] text-white shadow-sm border border-[#2E2E38]'
-                  : 'text-[#A0A0AB] hover:text-white hover:bg-[#1E1E24]/50'
+              id="desktop-nav-bento"
+              onClick={() => setCurrentView('bento')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
+                currentView === 'bento'
+                  ? 'bg-[#121214] text-white border border-[#3E3E4A] shadow-sm'
+                  : 'text-[#A0A0AB] hover:text-white hover:bg-[#1E1E24]'
               }`}
             >
               <Layers className="w-3.5 h-3.5 text-[#55E6C1]" />
-              <span className="hidden md:inline">3. Dashboard (Bento)</span>
-              <span className="md:hidden">Bento</span>
+              <span>Dashboard Projets (Bento)</span>
             </button>
 
             <button
-              id="nav-code-btn"
-              onClick={() => {
-                setCurrentView('code');
-              }}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              id="desktop-nav-activity"
+              onClick={() => setCurrentView('activity')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
+                currentView === 'activity'
+                  ? 'bg-[#121214] text-white border border-[#3E3E4A] shadow-sm'
+                  : 'text-[#A0A0AB] hover:text-white hover:bg-[#1E1E24]'
+              }`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#FF7675]" />
+              <span>Fiche d'Activité & Focus</span>
+            </button>
+
+            <button
+              id="desktop-nav-code"
+              onClick={() => setCurrentView('code')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                 currentView === 'code'
-                  ? 'bg-[#6C5CE7] text-white shadow-md'
-                  : 'text-[#A0A0AB] hover:text-white hover:bg-[#1E1E24]/50'
+                  ? 'bg-[#6C5CE7] text-white shadow-sm'
+                  : 'text-[#A0A0AB] hover:text-white hover:bg-[#1E1E24]'
               }`}
             >
               <Code2 className="w-3.5 h-3.5" />
-              <span className="font-bold">Code Flutter (Dart)</span>
+              <span>Code Flutter M3</span>
             </button>
-          </nav>
+          </div>
 
-          {/* Replay Splash Button */}
+          <div className="text-[11px] font-mono text-[#71717A]">
+            {user ? (
+              <span className="text-[#55E6C1]">users/{user.uid.substring(0, 6)}…/timeblocks</span>
+            ) : (
+              <span>Non synchronisé (Session locale)</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 5. Notification de connexion si l'utilisateur est anonyme / non connecté */}
+      {!user && !isAuthLoading && (
+        <div className="bg-gradient-to-r from-[#6C5CE7]/15 to-[#00CEC9]/15 border-b border-[#6C5CE7]/25 px-4 py-2 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-[#EDEDED]">
+            <span className="w-2 h-2 rounded-full bg-[#00CEC9] animate-pulse" />
+            <span>
+              Connectez votre compte Google pour sauvegarder vos blocs et projets dans votre base Firestore personnelle (<strong>users/{'{userId}'}/timeblocks</strong>).
+            </span>
+          </div>
           <button
-            id="replay-splash-btn"
-            onClick={() => setShowSplash(true)}
-            className="p-2 rounded-xl bg-[#1E1E24] hover:bg-[#282830] border border-[#2E2E38] text-[#A0A0AB] hover:text-white transition-colors"
-            title="Rejouer l'animation d'ouverture (Ruban de Möbius)"
+            onClick={handleLoginWithGoogle}
+            className="shrink-0 px-3 py-1 rounded-xl bg-white text-[#121214] font-bold text-xs hover:bg-gray-100 transition shadow"
           >
-            <RotateCcw className="w-4 h-4" />
+            Connexion Google
           </button>
         </div>
-      </header>
+      )}
 
-      {/* 3. Main Views Router */}
-      <main className="flex-1">
+      {/* 6. Zone Principale d'Affichage selon la vue active */}
+      <main className="flex-1 pb-28 md:pb-12">
         {currentView === 'agenda' && (
           <AgendaTimeline
             blocks={timeBlocks}
@@ -368,44 +439,73 @@ export default function App() {
             onSelectDate={setSelectedDate}
             onSelectBlock={handleSelectBlock}
             onOpenAddModal={() => setIsAddBlockOpen(true)}
-            onOpenProjects={() => setCurrentView('projects')}
+            onOpenProjects={() => setCurrentView('bento')}
             onSeedTemplates={handleSeedTemplates}
             onClearBlocks={handleClearBlocks}
           />
         )}
 
-        {currentView === 'activity' && activeBlock && (
+        {currentView === 'activity' && (
           <ActivitySheet
             block={activeBlock}
             onBack={() => setCurrentView('agenda')}
             onUpdateBlock={handleUpdateBlock}
+            onOpenAddModal={() => setIsAddBlockOpen(true)}
           />
         )}
 
-        {currentView === 'projects' && (
+        {currentView === 'bento' && (
           <ProjectsDashboard
             projects={projects}
             onBackToAgenda={() => setCurrentView('agenda')}
             onOpenAddModal={() => setIsAddProjectOpen(true)}
             onToggleMilestone={handleToggleMilestone}
+            onSeedProjects={handleSeedTemplates}
           />
         )}
 
-        {currentView === 'code' && <FlutterCodeViewer />}
+        {currentView === 'code' && (
+          <FlutterCodeViewer onBackToAgenda={() => setCurrentView('agenda')} />
+        )}
       </main>
 
-      {/* Modals */}
+      {/* 7. Bottom Navigation Bar Mobile (Fixe en bas sur smartphone) */}
+      <BottomNavBar
+        currentView={currentView}
+        onNavigate={(view) => setCurrentView(view)}
+        onOpenAddModal={() => {
+          if (currentView === 'bento') {
+            setIsAddProjectOpen(true);
+          } else {
+            setIsAddBlockOpen(true);
+          }
+        }}
+        hasActiveBlock={!!activeBlock}
+      />
+
+      {/* 8. Indicateur de statut Hors-Ligne pour la PWA */}
+      <OfflineIndicator />
+
+      {/* 9. Modal Carrousel Onboarding Multipotentiel */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        onLoginWithGoogle={handleLoginWithGoogle}
+        isAuthenticated={!!user}
+      />
+
+      {/* 10. Modals d'ajout de bloc de temps et de projet */}
       <AddBlockModal
         isOpen={isAddBlockOpen}
         onClose={() => setIsAddBlockOpen(false)}
-        onAdd={handleAddBlock}
-        defaultDate={selectedDate}
+        onAddBlock={handleAddBlock}
+        projects={projects}
       />
 
       <AddProjectModal
         isOpen={isAddProjectOpen}
         onClose={() => setIsAddProjectOpen(false)}
-        onAdd={handleAddProject}
+        onAddProject={handleAddProject}
       />
     </div>
   );

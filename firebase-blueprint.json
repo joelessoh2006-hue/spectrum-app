@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "timeBlock": {
+      "title": "TimeBlock",
+      "description": "Bloc de temps pour la planification d'un utilisateur multipotentiel",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "domainId": { "type": "string", "enum": ["dev", "music", "design", "wellness", "business"] },
+        "startTime": { "type": "string", "maxLength": 10 },
+        "endTime": { "type": "string", "maxLength": 10 },
+        "startMinutes": { "type": "number" },
+        "durationMinutes": { "type": "number" },
+        "isCompleted": { "type": "boolean" },
+        "energyLevel": { "type": "string", "enum": ["high", "medium", "low"] },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "date": { "type": "string", "maxLength": 20 }
+      },
+      "required": ["id", "title", "domainId", "startTime", "endTime", "startMinutes", "durationMinutes"]
+    },
+    "project": {
+      "title": "Project",
+      "description": "Projet de la Bento Grid appartenant à un utilisateur",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "domainId": { "type": "string", "enum": ["dev", "music", "design", "wellness", "business"] },
+        "progress": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "paused", "completed"] },
+        "color": { "type": "string", "maxLength": 20 }
+      },
+      "required": ["id", "title", "domainId", "progress", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/timeblocks/{blockId}": {
+      "schema": "timeBlock",
+      "description": "Blocs de temps temporels scopés par utilisateur"
+    },
+    "/users/{userId}/projects/{projectId}": {
+      "schema": "project",
+      "description": "Projets Bento Grid scopés par utilisateur"
+    }
+  }
+}
