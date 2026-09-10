@@ -14,6 +14,18 @@
         "startMinutes": { "type": "number" },
         "durationMinutes": { "type": "number" },
         "isCompleted": { "type": "boolean" },
+        "subtasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" },
+              "completed": { "type": "boolean" }
+            },
+            "required": ["id", "text", "completed"]
+          }
+        },
         "energyLevel": { "type": "string", "enum": ["high", "medium", "low"] },
         "notes": { "type": "string", "maxLength": 2000 },
         "date": { "type": "string", "maxLength": 20 }
@@ -28,12 +40,27 @@
         "id": { "type": "string", "maxLength": 128 },
         "title": { "type": "string", "maxLength": 200 },
         "description": { "type": "string", "maxLength": 1000 },
-        "domainId": { "type": "string", "enum": ["dev", "music", "design", "wellness", "business"] },
+        "domainId": { "type": "string", "maxLength": 128 },
         "progress": { "type": "number" },
         "status": { "type": "string", "enum": ["active", "paused", "completed"] },
         "color": { "type": "string", "maxLength": 20 }
       },
       "required": ["id", "title", "domainId", "progress", "status"]
+    },
+    "category": {
+      "title": "Category",
+      "description": "Pilier et catégorie personnalisée de l'utilisateur",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "label": { "type": "string", "maxLength": 100 },
+        "color": { "type": "string", "maxLength": 30 },
+        "colorSecondary": { "type": "string", "maxLength": 30 },
+        "iconName": { "type": "string", "maxLength": 50 },
+        "description": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "name", "color", "iconName"]
     }
   },
   "firestore": {
@@ -44,6 +71,10 @@
     "/users/{userId}/projects/{projectId}": {
       "schema": "project",
       "description": "Projets Bento Grid scopés par utilisateur"
+    },
+    "/users/{userId}/categories/{categoryId}": {
+      "schema": "category",
+      "description": "Piliers et catégories personnalisées scopés par utilisateur"
     }
   }
 }

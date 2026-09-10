@@ -10,8 +10,12 @@ import {
   ChevronDown,
   User as UserIcon,
   ShieldCheck,
+  Sun,
+  Moon,
+  Layers,
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
+import { useTheme } from '../context/ThemeContext';
 
 interface AuthHeaderProps {
   user: User | null;
@@ -20,6 +24,7 @@ interface AuthHeaderProps {
   onLoginGuest: () => void;
   onLogout: () => void;
   onOpenOnboarding: () => void;
+  onOpenManagePillars?: () => void;
   firestoreStatus: 'connected' | 'error' | 'syncing';
 }
 
@@ -30,17 +35,19 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
   onLoginGuest,
   onLogout,
   onOpenOnboarding,
+  onOpenManagePillars,
   firestoreStatus,
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const { theme, toggleTheme, isDark } = useTheme();
 
   return (
-    <header className="border-b border-[#27272A] bg-[#141417]/80 backdrop-blur-md sticky top-0 z-30 px-3 sm:px-6 py-2.5">
+    <header className="border-b border-[var(--border-app)] bg-[var(--header-bg)] backdrop-blur-xl sticky top-0 z-30 px-3 sm:px-6 py-2.5 transition-colors">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
         {/* Brand & Identity */}
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#6C5CE7] via-[#0984E3] to-[#00CEC9] p-[1.5px] shadow-md shadow-[#6C5CE7]/20 flex items-center justify-center shrink-0">
-            <div className="w-full h-full bg-[#121214] rounded-[10px] flex items-center justify-center">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#6C5CE7] via-[#0984E3] to-[#00CEC9] p-[1.5px] shadow-sm flex items-center justify-center shrink-0">
+            <div className="w-full h-full bg-[var(--bg-surface)] rounded-[10px] flex items-center justify-center">
               <span className="font-extrabold text-xs bg-gradient-to-r from-[#6C5CE7] to-[#00CEC9] bg-clip-text text-transparent">
                 S
               </span>
@@ -49,10 +56,10 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
 
           <div>
             <div className="flex items-center gap-1.5">
-              <h1 className="text-sm sm:text-base font-bold text-white tracking-tight leading-none">
+              <h1 className="text-sm sm:text-base font-bold text-[var(--text-primary)] tracking-tight leading-none">
                 Spectrum
               </h1>
-              <span className="hidden xs:inline-block text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#6C5CE7]/20 text-[#a29bfe] border border-[#6C5CE7]/30">
+              <span className="hidden xs:inline-block text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#6C5CE7]/15 text-[#6C5CE7] border border-[#6C5CE7]/30">
                 PWA
               </span>
             </div>
@@ -66,7 +73,7 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
                     : 'bg-[#FF7675]'
                 }`}
               />
-              <span className="text-[10px] text-[#A0A0AB] font-mono leading-none">
+              <span className="text-[10px] text-[var(--text-secondary)] font-mono leading-none">
                 {firestoreStatus === 'connected'
                   ? user
                     ? 'Cloud Firestore actif'
@@ -80,14 +87,42 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
         </div>
 
         {/* Header Right Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Light / Dark Mode Toggle Button */}
+          <button
+            id="theme-toggle-button"
+            onClick={toggleTheme}
+            className="w-8 h-8 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-highlight)] flex items-center justify-center transition active:scale-95 shadow-sm"
+            title={isDark ? 'Passer au mode clair (Luma App)' : 'Passer au mode sombre'}
+            aria-label="Basculer thème"
+          >
+            {isDark ? (
+              <Sun className="w-4 h-4 text-[#FDCB6E] transition-transform hover:rotate-45" />
+            ) : (
+              <Moon className="w-4 h-4 text-[#6C5CE7] transition-transform hover:-rotate-12" />
+            )}
+          </button>
+
+          {/* Manage Pillars Quick Button */}
+          {onOpenManagePillars && (
+            <button
+              id="header-manage-pillars-btn"
+              onClick={onOpenManagePillars}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-highlight)] transition active:scale-95 shadow-sm"
+              title="Gérer les piliers et catégories"
+            >
+              <Layers className="w-3.5 h-3.5 text-[#6C5CE7]" />
+              <span className="hidden md:inline">Piliers</span>
+            </button>
+          )}
+
           {/* In-app PWA install button */}
           <PWAInstallButton />
 
           {/* Guide / Onboarding Reopen Button */}
           <button
             onClick={onOpenOnboarding}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#1E1E24] border border-[#2E2E38] text-xs font-medium text-[#A0A0AB] hover:text-white hover:bg-[#27272A] transition active:scale-95"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-highlight)] transition active:scale-95"
             title="Revoir le guide d'organisation multipotentielle"
           >
             <HelpCircle className="w-3.5 h-3.5 text-[#00CEC9]" />
@@ -96,13 +131,13 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
 
           {/* User Profile / Auth State */}
           {isAuthLoading ? (
-            <div className="w-8 h-8 rounded-full bg-[#1E1E24] animate-pulse border border-[#2E2E38]" />
+            <div className="w-8 h-8 rounded-full bg-[var(--bg-surface-elevated)] animate-pulse border border-[var(--border-card)]" />
           ) : user ? (
             <div className="relative">
               <button
                 id="user-profile-menu-button"
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 p-1 pr-2 rounded-xl bg-[#1E1E24] border border-[#2E2E38] hover:border-[#3E3E4A] transition active:scale-95"
+                className="flex items-center gap-2 p-1 pr-2 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] hover:border-[var(--border-highlight)] transition active:scale-95 shadow-sm"
               >
                 {user.photoURL ? (
                   <img
@@ -116,10 +151,10 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
                     {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
                   </div>
                 )}
-                <span className="text-xs font-semibold text-white max-w-[100px] truncate hidden sm:inline">
+                <span className="text-xs font-semibold text-[var(--text-primary)] max-w-[100px] truncate hidden sm:inline">
                   {user.displayName || user.email?.split('@')[0] || 'Connecté'}
                 </span>
-                <ChevronDown className="w-3 h-3 text-[#A0A0AB]" />
+                <ChevronDown className="w-3 h-3 text-[var(--text-secondary)]" />
               </button>
 
               {/* Dropdown Menu */}
@@ -129,8 +164,8 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
                     className="fixed inset-0 z-40"
                     onClick={() => setShowUserMenu(false)}
                   />
-                  <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-[#18181B] border border-[#2E2E38] p-3 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
-                    <div className="pb-3 border-b border-[#27272A] mb-2">
+                  <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-card)] p-3 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 text-[var(--text-primary)]">
+                    <div className="pb-3 border-b border-[var(--border-card)] mb-2">
                       <div className="flex items-center gap-2">
                         {user.photoURL ? (
                           <img
@@ -145,10 +180,10 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
                           </div>
                         )}
                         <div className="overflow-hidden">
-                          <p className="text-xs font-bold text-white truncate">
+                          <p className="text-xs font-bold text-[var(--text-primary)] truncate">
                             {user.displayName || 'Utilisateur'}
                           </p>
-                          <p className="text-[11px] text-[#A0A0AB] truncate font-mono">
+                          <p className="text-[11px] text-[var(--text-secondary)] truncate font-mono">
                             {user.email || 'Compte invité'}
                           </p>
                         </div>
@@ -159,6 +194,19 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
                         <span>Données scopées : users/{user.uid.substring(0, 8)}…</span>
                       </div>
                     </div>
+
+                    {onOpenManagePillars && (
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          onOpenManagePillars();
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition mb-1"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-[#6C5CE7]" />
+                        <span>Gérer les Piliers & Couleurs</span>
+                      </button>
+                    )}
 
                     <button
                       onClick={() => {
@@ -209,3 +257,4 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
     </header>
   );
 };
+

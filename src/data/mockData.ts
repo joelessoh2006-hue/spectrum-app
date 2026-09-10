@@ -55,6 +55,12 @@ export const INITIAL_TIME_BLOCKS: TimeBlock[] = [
       { id: 'c1-3', title: 'Brancher AnimationController et CurvedAnimation (easeOutExpo)', isCompleted: true },
       { id: 'c1-4', title: 'Benchmarker le framerate sur mobile à 120Hz ProMotion', isCompleted: false },
     ],
+    subtasks: [
+      { id: 'c1-1', text: 'Définir la courbe paramétrique 3D du ruban de Möbius projetée en 2D', completed: true },
+      { id: 'c1-2', text: 'Implémenter le MaskFilter.blur() pour l\'effet néon électroluminescent', completed: true },
+      { id: 'c1-3', text: 'Brancher AnimationController et CurvedAnimation (easeOutExpo)', completed: true },
+      { id: 'c1-4', text: 'Benchmarker le framerate sur mobile à 120Hz ProMotion', completed: false },
+    ],
     projectId: 'proj-1',
   },
   {
@@ -74,6 +80,11 @@ export const INITIAL_TIME_BLOCKS: TimeBlock[] = [
       { id: 'c2-2', title: 'Enregistrer une maquette vocale au dictaphone pour caler le flow', isCompleted: false },
       { id: 'c2-3', title: 'Ajuster les respirations et syncopes rythmiques sur mesure 8 et 12', isCompleted: false },
     ],
+    subtasks: [
+      { id: 'c2-1', text: 'Définir le schéma de rimes internes (multisyllabiques en 4 temps)', completed: true },
+      { id: 'c2-2', text: 'Enregistrer une maquette vocale au dictaphone pour caler le flow', completed: false },
+      { id: 'c2-3', text: 'Ajuster les respirations et syncopes rythmiques sur mesure 8 et 12', completed: false },
+    ],
     projectId: 'proj-2',
   },
   {
@@ -92,6 +103,11 @@ export const INITIAL_TIME_BLOCKS: TimeBlock[] = [
       { id: 'c3-1', title: 'Lecture de l\'abstract et des graphes de connectivité fonctionnelle', isCompleted: true },
       { id: 'c3-2', title: 'Prise de notes atomiques dans le second cerveau Obsidian', isCompleted: true },
       { id: 'c3-3', title: 'Synthèse sous forme de mind-map pour le prochain article de blog', isCompleted: false },
+    ],
+    subtasks: [
+      { id: 'c3-1', text: 'Lecture de l\'abstract et des graphes de connectivité fonctionnelle', completed: true },
+      { id: 'c3-2', text: 'Prise de notes atomiques dans le second cerveau Obsidian', completed: true },
+      { id: 'c3-3', text: 'Synthèse sous forme de mind-map pour le prochain article de blog', completed: false },
     ],
     projectId: 'proj-3',
   },
@@ -113,6 +129,12 @@ export const INITIAL_TIME_BLOCKS: TimeBlock[] = [
       { id: 'c4-3', title: 'Implémenter le batch write pour les mutations de checklist en masse', isCompleted: false },
       { id: 'c4-4', title: 'Rédiger les règles firestore.rules restrictives par uid', isCompleted: false },
     ],
+    subtasks: [
+      { id: 'c4-1', text: 'Créer le Converter avec FirestoreDataConverter<TimeBlock>', completed: true },
+      { id: 'c4-2', text: 'Gérer les snapshots en temps réel avec StreamSubscription', completed: true },
+      { id: 'c4-3', text: 'Implémenter le batch write pour les mutations de checklist en masse', completed: false },
+      { id: 'c4-4', text: 'Rédiger les règles firestore.rules restrictives par uid', completed: false },
+    ],
     projectId: 'proj-1',
   },
   {
@@ -131,6 +153,11 @@ export const INITIAL_TIME_BLOCKS: TimeBlock[] = [
       { id: 'c5-1', title: 'De-essing chirurgical avec dynamic EQ', isCompleted: true },
       { id: 'c5-2', title: 'Alignement de phase entre doubleur stéréo et voix lead', isCompleted: true },
       { id: 'c5-3', title: 'Export stems pour pré-mastering', isCompleted: true },
+    ],
+    subtasks: [
+      { id: 'c5-1', text: 'De-essing chirurgical avec dynamic EQ', completed: true },
+      { id: 'c5-2', text: 'Alignement de phase entre doubleur stéréo et voix lead', completed: true },
+      { id: 'c5-3', text: 'Export stems pour pré-mastering', completed: true },
     ],
     projectId: 'proj-2',
   },

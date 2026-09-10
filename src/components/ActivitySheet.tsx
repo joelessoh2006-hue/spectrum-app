@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { TimeBlock, ChecklistItem } from '../types';
+import { TimeBlock, DomainConfig } from '../types';
 import { DOMAINS } from '../data/mockData';
+import { getPillarIcon } from '../utils/iconMap';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -13,6 +14,7 @@ import {
   Sparkles,
   Save,
   Check,
+  RotateCcw,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -21,6 +23,8 @@ interface ActivitySheetProps {
   onBack: () => void;
   onUpdateBlock: (updatedBlock: TimeBlock) => void;
   onOpenAddModal?: () => void;
+  onOpenEditModal?: (block: TimeBlock) => void;
+  categories?: DomainConfig[];
 }
 
 export const ActivitySheet: React.FC<ActivitySheetProps> = ({
@@ -28,29 +32,31 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
   onBack,
   onUpdateBlock,
   onOpenAddModal,
+  onOpenEditModal,
+  categories,
 }) => {
   if (!block) {
     return (
-      <div className="pb-28 max-w-3xl mx-auto px-4 pt-6 text-center">
-        <div className="bg-[#1E1E24] border border-[#2E2E38] rounded-3xl p-8 shadow-xl">
+      <div className="pb-28 max-w-3xl mx-auto px-4 pt-6 text-center font-['Plus_Jakarta_Sans',sans-serif]">
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-3xl p-8 shadow-sm">
           <div className="w-12 h-12 rounded-2xl bg-[#6C5CE7]/10 text-[#6C5CE7] flex items-center justify-center mx-auto mb-4 border border-[#6C5CE7]/20">
             <Sparkles className="w-6 h-6" />
           </div>
-          <h2 className="text-xl font-bold text-white">Aucune Fiche d'Activité sélectionnée</h2>
-          <p className="text-xs text-[#A0A0AB] mt-2 max-w-md mx-auto leading-relaxed">
+          <h2 className="text-xl font-bold text-[var(--text-primary)]">Aucune Fiche d'Activité sélectionnée</h2>
+          <p className="text-xs text-[var(--text-secondary)] mt-2 max-w-md mx-auto leading-relaxed">
             Pour ouvrir une fiche détaillée avec checklist et notes d'immersion, sélectionnez un bloc dans l'Agenda ou créez-en un nouveau.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <button
               onClick={onBack}
-              className="px-4 py-2 rounded-xl bg-[#121214] border border-[#2E2E38] text-xs font-semibold text-white hover:bg-[#25252D] transition"
+              className="px-4 py-2 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs font-semibold text-[var(--text-primary)] hover:border-[var(--border-highlight)] transition active:scale-95"
             >
               Retour à l'Agenda
             </button>
             {onOpenAddModal && (
               <button
                 onClick={onOpenAddModal}
-                className="px-4 py-2 rounded-xl bg-[#6C5CE7] text-white text-xs font-semibold hover:bg-[#5F27CD] transition shadow-lg shadow-[#6C5CE7]/20"
+                className="px-4 py-2 rounded-xl bg-[#6C5CE7] text-white text-xs font-semibold hover:bg-[#5b4bc4] transition shadow-md shadow-[#6C5CE7]/20 active:scale-95"
               >
                 + Créer un bloc de temps
               </button>
@@ -61,38 +67,78 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
     );
   }
 
-  const domainConfig = DOMAINS[block.domain] || DOMAINS.tech;
+  // Dynamic domain config
+  const activeCategory = categories?.find((c) => c.id === block.domain);
+  const domainConfig = activeCategory
+    ? {
+        name: activeCategory.name,
+        color: activeCategory.color,
+        label: activeCategory.label || 'Sphère cognitive',
+        iconName: activeCategory.iconName,
+      }
+    : (DOMAINS as Record<string, any>)[block.domain] || {
+        name: block.domain,
+        color: '#6C5CE7',
+        label: 'Sphère cognitive',
+        iconName: 'Terminal',
+      };
+
+  const Icon = getPillarIcon(domainConfig.iconName);
+
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
-  const [asModalSheet, setAsModalSheet] = useState(false);
 
-  // Compute checklist %
-  const totalItems = block.checklist.length;
-  const completedItems = block.checklist.filter((i) => i.isCompleted).length;
+  // Subtasks & checklist items
+  const currentSubtasks: { id: string; text: string; completed: boolean }[] =
+    block.subtasks && block.subtasks.length > 0
+      ? block.subtasks
+      : (block.checklist || []).map((c) => ({
+          id: c.id,
+          text: c.title,
+          completed: c.isCompleted,
+        }));
+
+  const totalItems = currentSubtasks.length;
+  const completedItems = currentSubtasks.filter((i) => i.completed).length;
   const progressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
+  const showSavedBadge = () => {
+    setSaveStatus('Enregistré');
+    setTimeout(() => {
+      setSaveStatus(null);
+    }, 2000);
+  };
+
   const handleToggleTask = (itemId: string) => {
-    const updatedChecklist = block.checklist.map((item) => {
+    const updatedSubtasks = currentSubtasks.map((item) => {
       if (item.id === itemId) {
-        const nextState = !item.isCompleted;
+        const nextState = !item.completed;
         if (nextState) {
-          // Trigger light celebration confetti
           try {
             confetti({
               particleCount: 25,
               spread: 60,
               origin: { y: 0.7 },
-              colors: [domainConfig.color, domainConfig.colorSecondary, '#ffffff'],
+              colors: [domainConfig.color, '#6C5CE7', '#ffffff'],
             });
           } catch (_) {}
         }
-        return { ...item, isCompleted: nextState };
+        return { ...item, completed: nextState };
       }
       return item;
     });
 
-    const updated = { ...block, checklist: updatedChecklist };
-    onUpdateBlock(updated);
+    const updatedChecklist = updatedSubtasks.map((s) => ({
+      id: s.id,
+      title: s.text,
+      isCompleted: s.completed,
+    }));
+
+    onUpdateBlock({
+      ...block,
+      subtasks: updatedSubtasks,
+      checklist: updatedChecklist,
+    });
     showSavedBadge();
   };
 
@@ -100,295 +146,296 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
 
-    const newItem: ChecklistItem = {
-      id: `item-${Date.now()}`,
-      title: newTaskTitle.trim(),
-      isCompleted: false,
+    const newItem = {
+      id: `st-${Date.now()}`,
+      text: newTaskTitle.trim(),
+      completed: false,
     };
 
-    const updated = { ...block, checklist: [...block.checklist, newItem] };
-    onUpdateBlock(updated);
+    const updatedSubtasks = [...currentSubtasks, newItem];
+    const updatedChecklist = updatedSubtasks.map((s) => ({
+      id: s.id,
+      title: s.text,
+      isCompleted: s.completed,
+    }));
+
+    onUpdateBlock({
+      ...block,
+      subtasks: updatedSubtasks,
+      checklist: updatedChecklist,
+    });
     setNewTaskTitle('');
     showSavedBadge();
   };
 
   const handleDeleteTask = (itemId: string) => {
-    const updatedChecklist = block.checklist.filter((item) => item.id !== itemId);
-    onUpdateBlock({ ...block, checklist: updatedChecklist });
+    const updatedSubtasks = currentSubtasks.filter((item) => item.id !== itemId);
+    const updatedChecklist = updatedSubtasks.map((s) => ({
+      id: s.id,
+      title: s.text,
+      isCompleted: s.completed,
+    }));
+
+    onUpdateBlock({
+      ...block,
+      subtasks: updatedSubtasks,
+      checklist: updatedChecklist,
+    });
     showSavedBadge();
   };
 
   const handleNotesChange = (text: string) => {
-    onUpdateBlock({ ...block, notes: text });
+    onUpdateBlock({
+      ...block,
+      notes: text,
+    });
     showSavedBadge();
   };
 
-  const showSavedBadge = () => {
-    setSaveStatus('Synchronisé avec Cloud Firestore');
-    setTimeout(() => {
-      setSaveStatus(null);
-    }, 2200);
-  };
-
   return (
-    <div className="min-h-full pb-20 text-[#EDEDED] font-['Plus_Jakarta_Sans',sans-serif]">
-      {/* Top App Bar with back navigation */}
-      <div className="sticky top-0 z-20 backdrop-blur-md bg-[#121214]/85 border-b border-[#2E2E38] px-4 py-3.5 flex items-center justify-between">
+    <div className="pb-32 max-w-3xl mx-auto px-4 pt-4 text-[var(--text-primary)] font-['Plus_Jakarta_Sans',sans-serif] space-y-6">
+      {/* Top action navigation */}
+      <div className="flex items-center justify-between gap-4 pb-4 border-b border-[var(--border-card)]">
         <button
-          id="activity-back-btn"
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#1E1E24] hover:bg-[#282830] border border-[#2E2E38] text-sm font-semibold text-[#A0A0AB] hover:text-white transition-all"
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition active:scale-95 shadow-sm"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Agenda</span>
+          <span>Retour à l'Agenda</span>
         </button>
 
         <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center bg-[#1E1E24] p-0.5 rounded-lg border border-[#2E2E38] text-xs">
-            <button
-              type="button"
-              onClick={() => setAsModalSheet(false)}
-              className={`px-2.5 py-1 rounded-md transition-all ${
-                !asModalSheet ? 'bg-[#2E2E38] text-white font-semibold' : 'text-[#71717A] hover:text-white'
-              }`}
-            >
-              Page
-            </button>
-            <button
-              type="button"
-              onClick={() => setAsModalSheet(true)}
-              className={`px-2.5 py-1 rounded-md transition-all ${
-                asModalSheet ? 'bg-[#2E2E38] text-white font-semibold' : 'text-[#71717A] hover:text-white'
-              }`}
-            >
-              Modal Sheet
-            </button>
-          </div>
-
           {saveStatus ? (
-            <span className="text-xs font-mono text-[#55E6C1] flex items-center gap-1.5 bg-[#55E6C1]/10 px-2.5 py-1 rounded-full border border-[#55E6C1]/30">
+            <span className="text-xs font-mono text-[#6C5CE7] flex items-center gap-1.5 bg-[#6C5CE7]/10 px-2.5 py-1 rounded-full border border-[#6C5CE7]/30">
               <Check className="w-3.5 h-3.5" />
               {saveStatus}
             </span>
           ) : (
-            <span className="text-xs font-mono text-[#71717A] flex items-center gap-1">
+            <span className="text-xs font-mono text-[var(--text-muted)] flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-[#55E6C1] inline-block" />
               Firestore Auto-Sync
+            </span>
+          )}
+
+          {onOpenEditModal && (
+            <button
+              type="button"
+              onClick={() => onOpenEditModal(block)}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--bg-surface)] border border-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[#6C5CE7] transition"
+            >
+              Modifier le bloc
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Domain badge & Time summary */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-2xl text-xs font-bold uppercase tracking-wider border"
+          style={{
+            backgroundColor: `${domainConfig.color}15`,
+            borderColor: `${domainConfig.color}35`,
+            color: domainConfig.color,
+          }}
+        >
+          <Icon className="w-3.5 h-3.5" />
+          <span>{domainConfig.name}</span>
+        </div>
+
+        <div className="flex items-center gap-3 text-xs font-medium text-[var(--text-secondary)]">
+          <span className="inline-flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+            {block.startTime} — {block.endTime} ({block.durationMinutes} min)
+          </span>
+          {block.isRecurring && (
+            <span className="inline-flex items-center gap-1 bg-[var(--bg-surface)] px-2.5 py-0.5 rounded-xl border border-[var(--border-card)]">
+              <Calendar className="w-3 h-3 text-[#6C5CE7]" />
+              Récurrent
             </span>
           )}
         </div>
       </div>
 
-      <div className={`max-w-2xl mx-auto px-4 ${asModalSheet ? 'pt-4' : 'pt-6'} space-y-6`}>
-        {/* Modal Handle if Modal Sheet presentation */}
-        {asModalSheet && (
-          <div className="flex justify-center -mt-1 mb-2">
-            <div className="w-12 h-1.5 rounded-full bg-[#2E2E38]" />
-          </div>
+      {/* Title */}
+      <div>
+        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[var(--text-primary)]">
+          {block.title}
+        </h1>
+        {domainConfig.label && (
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">{domainConfig.label}</p>
         )}
+      </div>
 
-        {/* Domain pill & Time summary */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border"
-            style={{
-              backgroundColor: domainConfig.bgRgba,
-              borderColor: domainConfig.borderRgba,
-              color: domainConfig.color,
-            }}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{domainConfig.name}</span>
-          </div>
-
-          <div className="flex items-center gap-3 text-xs font-medium text-[#A0A0AB]">
-            <span className="inline-flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5 text-[#71717A]" />
-              {block.startTime} — {block.endTime} ({block.durationMinutes} min)
-            </span>
-            {block.isRecurring && (
-              <span className="inline-flex items-center gap-1 bg-[#1E1E24] px-2 py-0.5 rounded border border-[#2E2E38]">
-                <Calendar className="w-3 h-3 text-[#71717A]" />
-                Récurrent
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Title */}
-        <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
-            {block.title}
-          </h1>
-          <p className="mt-1 text-sm text-[#A0A0AB]">{domainConfig.label}</p>
-        </div>
-
-        {/* 1. OBJECTIF GLOBAL CARD (Background #1E1E24, Radius 20px) */}
+      {/* 1. OBJECTIF GLOBAL CARD */}
+      {block.globalObjective && (
         <div
-          className="relative bg-[#1E1E24] border rounded-[20px] p-5 shadow-lg overflow-hidden"
-          style={{ borderColor: domainConfig.borderRgba }}
+          className="relative bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-5 sm:p-6 shadow-sm overflow-hidden"
         >
           <div
-            className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl pointer-events-none opacity-20"
+            className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl pointer-events-none opacity-10"
             style={{ backgroundColor: domainConfig.color }}
           />
 
           <div className="flex items-center gap-2 mb-2.5">
             <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: domainConfig.bgRgba, color: domainConfig.color }}
+              className="w-7 h-7 rounded-xl flex items-center justify-center"
+              style={{
+                backgroundColor: `${domainConfig.color}20`,
+                color: domainConfig.color,
+              }}
             >
               <Flag className="w-4 h-4" />
             </div>
-            <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: domainConfig.color }}>
+            <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: domainConfig.color }}>
               Objectif Global (Roadmap)
             </h3>
           </div>
 
-          <p className="text-[#EDEDED] text-sm md:text-base leading-relaxed font-normal">
+          <p className="text-[var(--text-primary)] text-sm md:text-base leading-relaxed font-normal">
             {block.globalObjective}
           </p>
         </div>
+      )}
 
-        {/* 2. SOUS-CHECKLIST INTERACTIVE AVEC % */}
-        <div className="bg-[#1E1E24] border border-[#2E2E38] rounded-[20px] p-5 shadow-lg space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5" style={{ color: domainConfig.color }} />
-              <h2 className="text-base font-bold text-white">Sous-Checklist Interactive</h2>
-            </div>
+      {/* 2. SOUS-CHECKLIST INTERACTIVE AVEC % */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5" style={{ color: domainConfig.color }} />
+            <h2 className="text-base font-bold text-[var(--text-primary)]">
+              Étapes du Projet / Checklist
+            </h2>
+          </div>
+          <div
+            className="px-3 py-1 rounded-full text-xs font-bold border font-mono"
+            style={{
+              backgroundColor: `${domainConfig.color}15`,
+              borderColor: `${domainConfig.color}35`,
+              color: domainConfig.color,
+            }}
+          >
+            {completedItems}/{totalItems} ({progressPercent}%)
+          </div>
+        </div>
+
+        {/* Animated Progress Bar */}
+        <div className="space-y-1.5">
+          <div className="w-full h-2 bg-[var(--bg-surface-elevated)] rounded-full overflow-hidden border border-[var(--border-card)]">
             <div
-              className="px-3 py-1 rounded-full text-xs font-bold border font-mono"
+              className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
-                backgroundColor: domainConfig.bgRgba,
-                borderColor: domainConfig.borderRgba,
-                color: domainConfig.color,
-              }}
-            >
-              {completedItems}/{totalItems} ({progressPercent}%)
-            </div>
-          </div>
-
-          {/* Animated Progress Bar */}
-          <div className="space-y-1.5">
-            <div className="w-full h-2.5 bg-[#121214] rounded-full overflow-hidden border border-[#2E2E38]/80">
-              <div
-                className="h-full rounded-full transition-all duration-500 ease-out"
-                style={{
-                  width: `${progressPercent}%`,
-                  backgroundColor: domainConfig.color,
-                  boxShadow: `0 0 10px ${domainConfig.color}`,
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Checklist Items list */}
-          <div className="space-y-2 pt-2">
-            {block.checklist.length === 0 ? (
-              <p className="text-xs text-[#71717A] italic py-2">
-                Aucune action dans cette feuille de route pour le moment.
-              </p>
-            ) : (
-              block.checklist.map((item) => (
-                <div
-                  key={item.id}
-                  className={`group flex items-start justify-between gap-3 p-3 rounded-xl border transition-all ${
-                    item.isCompleted
-                      ? 'bg-[#121214]/60 border-[#2E2E38] opacity-70'
-                      : 'bg-[#121214] border-[#2E2E38] hover:border-[#3E3E4C]'
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleToggleTask(item.id)}
-                    className="flex items-start gap-3 text-left flex-1"
-                  >
-                    <div className="mt-0.5 shrink-0">
-                      <div
-                        className={`w-5 h-5 rounded-[7px] border flex items-center justify-center transition-all ${
-                          item.isCompleted
-                            ? 'shadow-sm'
-                            : 'border-[#71717A]/80 hover:border-[#A0A0AB] bg-transparent'
-                        }`}
-                        style={{
-                          backgroundColor: item.isCompleted ? domainConfig.color : 'transparent',
-                          borderColor: item.isCompleted ? domainConfig.color : undefined,
-                        }}
-                      >
-                        {item.isCompleted && (
-                          <Check className="w-3.5 h-3.5 text-[#121214] stroke-[3]" />
-                        )}
-                      </div>
-                    </div>
-                    <span
-                      className={`text-sm leading-snug transition-all ${
-                        item.isCompleted
-                          ? 'line-through text-[#71717A]'
-                          : 'text-[#EDEDED] font-medium'
-                      }`}
-                    >
-                      {item.title}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteTask(item.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-[#71717A] hover:text-[#FF7675] rounded transition-opacity"
-                    title="Supprimer la tâche"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Add Item form */}
-          <form onSubmit={handleAddTask} className="flex items-center gap-2 pt-2">
-            <input
-              type="text"
-              placeholder="Ajouter une action concrète..."
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              className="flex-1 bg-[#121214] border border-[#2E2E38] rounded-xl px-4 py-2.5 text-sm text-[#EDEDED] placeholder-[#71717A] focus:outline-none focus:border-[#6C5CE7]"
-            />
-            <button
-              type="submit"
-              disabled={!newTaskTitle.trim()}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
-              style={{
+                width: `${progressPercent}%`,
                 backgroundColor: domainConfig.color,
-                color: '#121214',
               }}
-            >
-              <Plus className="w-4 h-4" />
-              <span>Ajouter</span>
-            </button>
-          </form>
-        </div>
-
-        {/* 3. ZONE DE NOTES (Auto-save) */}
-        <div className="bg-[#1E1E24] border border-[#2E2E38] rounded-[20px] p-5 shadow-lg space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Save className="w-4 h-4 text-[#A0A0AB]" />
-              Zone de Notes &amp; Synthèse
-            </h3>
-            <span className="text-[11px] font-mono text-[#71717A]">
-              Sauvegarde auto Firestore
-            </span>
+            />
           </div>
-
-          <textarea
-            rows={5}
-            value={block.notes}
-            onChange={(e) => handleNotesChange(e.target.value)}
-            placeholder="Prenez des notes de séance, consigner les réflexions, les métriques et liens utiles..."
-            className="w-full bg-[#121214] border border-[#2E2E38] rounded-xl p-3.5 text-sm text-[#EDEDED] placeholder-[#71717A] focus:outline-none focus:border-[#6C5CE7] leading-relaxed font-sans"
-          />
         </div>
+
+        {/* Checklist Items list */}
+        <div className="space-y-2 pt-1">
+          {currentSubtasks.length === 0 ? (
+            <p className="text-xs text-[var(--text-secondary)] italic py-2">
+              Aucune étape dans cette feuille de route pour le moment.
+            </p>
+          ) : (
+            currentSubtasks.map((item) => (
+              <div
+                key={item.id}
+                className={`group flex items-start justify-between gap-3 p-3 rounded-2xl border transition-all ${
+                  item.completed
+                    ? 'bg-[var(--bg-surface-elevated)]/60 border-[var(--border-card)] opacity-70'
+                    : 'bg-[var(--bg-surface-elevated)] border-[var(--border-card)] hover:border-[var(--border-highlight)]'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleToggleTask(item.id)}
+                  className="flex items-start gap-3 text-left flex-1"
+                >
+                  <div className="mt-0.5 shrink-0">
+                    <div
+                      className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
+                        item.completed
+                          ? 'shadow-sm'
+                          : 'border-[var(--border-card)] hover:border-[var(--text-secondary)] bg-transparent'
+                      }`}
+                      style={{
+                        backgroundColor: item.completed ? domainConfig.color : 'transparent',
+                        borderColor: item.completed ? domainConfig.color : undefined,
+                      }}
+                    >
+                      {item.completed && (
+                        <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
+                      )}
+                    </div>
+                  </div>
+                  <span
+                    className={`text-sm leading-snug transition-all ${
+                      item.completed
+                        ? 'line-through text-[var(--text-muted)]'
+                        : 'text-[var(--text-primary)] font-medium'
+                    }`}
+                  >
+                    {item.text}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDeleteTask(item.id)}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 text-[var(--text-muted)] hover:text-[#FF7675] rounded-lg transition-opacity"
+                  title="Supprimer cette étape"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Add Item form */}
+        <form onSubmit={handleAddTask} className="flex items-center gap-2 pt-2">
+          <input
+            type="text"
+            placeholder="Ajouter une action concrète..."
+            value={newTaskTitle}
+            onChange={(e) => setNewTaskTitle(e.target.value)}
+            className="flex-1 bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7]"
+          />
+          <button
+            type="submit"
+            disabled={!newTaskTitle.trim()}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 text-white shadow-sm"
+            style={{
+              backgroundColor: domainConfig.color,
+            }}
+          >
+            <Plus className="w-4 h-4" />
+            <span>Ajouter</span>
+          </button>
+        </form>
+      </div>
+
+      {/* 3. ZONE DE NOTES (Auto-save) */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-5 sm:p-6 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <Save className="w-4 h-4 text-[var(--text-secondary)]" />
+            <span>Zone de Notes & Synthèse</span>
+          </h3>
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">
+            Sauvegarde auto Firestore
+          </span>
+        </div>
+
+        <textarea
+          rows={5}
+          value={block.notes || ''}
+          onChange={(e) => handleNotesChange(e.target.value)}
+          placeholder="Prenez des notes de séance, consigner les réflexions, les métriques et liens utiles..."
+          className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl p-3.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7] leading-relaxed font-sans"
+        />
       </div>
     </div>
   );

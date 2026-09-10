@@ -1,15 +1,25 @@
-export type DomainId = 'tech' | 'art' | 'curiosity';
+export type DomainId = string;
 
 export interface DomainConfig {
-  id: DomainId;
+  id: string;
   name: string;
   label: string;
   color: string;
-  colorSecondary: string;
-  bgRgba: string;
-  borderRgba: string;
+  colorSecondary?: string;
+  bgRgba?: string;
+  borderRgba?: string;
   iconName: string;
-  description: string;
+  description?: string;
+  order?: number;
+  createdAt?: string;
+}
+
+export type ThemeMode = 'light' | 'dark';
+
+export interface Subtask {
+  id: string;
+  text: string;
+  completed: boolean;
 }
 
 export interface ChecklistItem {
@@ -31,7 +41,8 @@ export interface TimeBlock {
   isRecurring: boolean;
   recurringDays: number[]; // 1=Mon, 7=Sun
   globalObjective: string;
-  checklist: ChecklistItem[];
+  subtasks: Subtask[];
+  checklist?: ChecklistItem[]; // kept for compatibility
   notes: string;
   projectId?: string;
   isFocusSessionActive?: boolean;

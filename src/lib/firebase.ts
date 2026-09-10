@@ -17,7 +17,7 @@ import {
   User,
   signInAnonymously,
 } from 'firebase/auth';
-import { TimeBlock, Project } from '../types';
+import { TimeBlock, Project, DomainConfig } from '../types';
 
 /**
  * Configuration Firebase officielle pour le projet Spectrum
@@ -133,6 +133,53 @@ export function getUserProjectsPath(userId: string): string {
   return `users/${userId}/projects`;
 }
 
+export function getUserCategoriesPath(userId: string): string {
+  return `users/${userId}/categories`;
+}
+
+/**
+ * Écoute temps réel des catégories / piliers personnalisés de l'utilisateur connecté
+ * (users/{userId}/categories)
+ */
+export function subscribeToUserCategories(
+  userId: string,
+  onSuccess: (categories: DomainConfig[]) => void,
+  onError?: (error: Error) => void
+): () => void {
+  const path = getUserCategoriesPath(userId);
+  const colRef = collection(db, path);
+
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const categories: DomainConfig[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        categories.push({
+          id: docSnap.id,
+          name: data.name || docSnap.id,
+          label: data.label || '',
+          color: data.color || '#6C5CE7',
+          colorSecondary: data.colorSecondary,
+          bgRgba: data.bgRgba,
+          borderRgba: data.borderRgba,
+          iconName: data.iconName || 'Sparkles',
+          description: data.description || '',
+          order: data.order ?? 999,
+          createdAt: data.createdAt,
+        });
+      });
+      // Sort by order or name
+      categories.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+      onSuccess(categories);
+    },
+    (err) => {
+      console.warn('Erreur écoute catégories Firestore:', err);
+      onError?.(err as Error);
+    }
+  );
+}
+
 /**
  * Écoute temps réel des blocs de temps de l'utilisateur connecté
  * (users/{userId}/timeblocks)
@@ -151,9 +198,28 @@ export function subscribeToUserTimeBlocks(
       const blocks: TimeBlock[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
+        const rawSubtasks = Array.isArray(data.subtasks) ? data.subtasks : [];
+        const rawChecklist = Array.isArray(data.checklist) ? data.checklist : [];
+        const subtasks = rawSubtasks.length > 0
+          ? rawSubtasks
+          : rawChecklist.map((c: { id: string; title: string; isCompleted?: boolean }) => ({
+              id: c.id,
+              text: c.title,
+              completed: !!c.isCompleted,
+            }));
+        const checklist = rawChecklist.length > 0
+          ? rawChecklist
+          : subtasks.map((s: { id: string; text: string; completed?: boolean }) => ({
+              id: s.id,
+              title: s.text,
+              isCompleted: !!s.completed,
+            }));
+
         blocks.push({
           ...(data as TimeBlock),
           id: docSnap.id,
+          subtasks,
+          checklist,
         });
       });
       // Tri par startMinutes
@@ -208,9 +274,63 @@ export async function saveUserTimeBlock(userId: string, block: TimeBlock): Promi
   const path = `${getUserTimeBlocksPath(userId)}/${block.id}`;
   try {
     const docRef = doc(db, getUserTimeBlocksPath(userId), block.id);
-    await setDoc(docRef, block, { merge: true });
+    const subtasks = block.subtasks || (block.checklist || []).map((c) => ({
+      id: c.id,
+      text: c.title,
+      completed: c.isCompleted,
+    }));
+    const checklist = block.checklist || subtasks.map((s) => ({
+      id: s.id,
+      title: s.text,
+      isCompleted: s.completed,
+    }));
+
+    const dataToSave = {
+      ...block,
+      subtasks,
+      checklist,
+    };
+    await setDoc(docRef, dataToSave, { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Sauvegarde par lot (batch) de multiples blocs de temps pour l'utilisateur
+ */
+export async function saveUserTimeBlocksBatch(userId: string, blocks: TimeBlock[]): Promise<void> {
+  if (!blocks.length) return;
+  const basePath = getUserTimeBlocksPath(userId);
+  try {
+    const CHUNK_SIZE = 400;
+    for (let i = 0; i < blocks.length; i += CHUNK_SIZE) {
+      const chunk = blocks.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const block of chunk) {
+        const docRef = doc(db, basePath, block.id);
+        const subtasks = block.subtasks || (block.checklist || []).map((c) => ({
+          id: c.id,
+          text: c.title,
+          completed: c.isCompleted,
+        }));
+        const checklist = block.checklist || subtasks.map((s) => ({
+          id: s.id,
+          title: s.text,
+          isCompleted: s.completed,
+        }));
+
+        const dataToSave = {
+          ...block,
+          subtasks,
+          checklist,
+        };
+        batch.set(docRef, dataToSave, { merge: true });
+      }
+      await batch.commit();
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, basePath);
   }
 }
 
@@ -300,3 +420,106 @@ export async function clearUserTimeBlocks(userId: string, blocks: TimeBlock[]): 
     handleFirestoreError(err, OperationType.DELETE, path);
   }
 }
+
+/**
+ * Sauvegarde ou mise à jour d'une catégorie / pilier dans Firestore
+ */
+export async function saveUserCategory(userId: string, category: DomainConfig): Promise<void> {
+  const path = `${getUserCategoriesPath(userId)}/${category.id}`;
+  try {
+    const docRef = doc(db, getUserCategoriesPath(userId), category.id);
+    const dataToSave = {
+      id: category.id,
+      name: category.name,
+      label: category.label || '',
+      color: category.color || '#6C5CE7',
+      colorSecondary: category.colorSecondary || '',
+      iconName: category.iconName || 'Sparkles',
+      description: category.description || '',
+      order: category.order ?? Date.now(),
+      createdAt: category.createdAt || new Date().toISOString(),
+    };
+    await setDoc(docRef, dataToSave, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Suppression d'une catégorie / pilier de l'utilisateur
+ */
+export async function deleteUserCategory(userId: string, categoryId: string): Promise<void> {
+  const path = `${getUserCategoriesPath(userId)}/${categoryId}`;
+  try {
+    const docRef = doc(db, getUserCategoriesPath(userId), categoryId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+  }
+}
+
+/**
+ * Initialisation des piliers par défaut dans Firestore si la collection est vide
+ */
+export async function seedUserDefaultCategories(
+  userId: string,
+  categories?: DomainConfig[]
+): Promise<void> {
+  const batch = writeBatch(db);
+  const path = getUserCategoriesPath(userId);
+
+  const listToSeed = categories && categories.length > 0 ? categories : [
+    {
+      id: 'tech',
+      name: 'Code & Architecture',
+      label: 'Développement, Ingénierie & Systèmes',
+      color: '#6C5CE7',
+      colorSecondary: '#8172F5',
+      iconName: 'Terminal',
+      description: 'Développement de systèmes, architecture logicielle et Deep Work.',
+      order: 0,
+    },
+    {
+      id: 'art',
+      name: 'Création & Musique',
+      label: 'Design UI/UX, Beatmaking & Arts',
+      color: '#FF7675',
+      colorSecondary: '#FAB1A0',
+      iconName: 'Flame',
+      description: 'Production musicale, design visuel et flow créatif.',
+      order: 1,
+    },
+    {
+      id: 'strategy',
+      name: 'Stratégie & Savoir',
+      label: 'Veille, Business & Apprentissages',
+      color: '#55E6C1',
+      colorSecondary: '#81ECEC',
+      iconName: 'Compass',
+      description: 'Veille technologique, lecture, cadrage stratégique.',
+      order: 2,
+    },
+  ];
+
+  listToSeed.forEach((cat, index) => {
+    const ref = doc(db, path, cat.id);
+    batch.set(ref, {
+      id: cat.id,
+      name: cat.name,
+      label: cat.label || '',
+      color: cat.color,
+      colorSecondary: cat.colorSecondary || '',
+      iconName: cat.iconName,
+      description: cat.description || '',
+      order: cat.order ?? index,
+      createdAt: new Date().toISOString(),
+    });
+  });
+
+  try {
+    await batch.commit();
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+

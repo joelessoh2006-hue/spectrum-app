@@ -4,19 +4,28 @@ import { MobiusNeonCanvas } from './MobiusNeonCanvas';
 import { Sparkles } from 'lucide-react';
 
 interface SplashScreenProps {
-  onComplete: () => void;
+  onComplete?: () => void;
+  onFinish?: () => void;
   isReplay?: boolean;
 }
 
-export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
+export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete, onFinish }) => {
   const [drawProgress, setDrawProgress] = useState(0);
   const [showText, setShowText] = useState(false);
+
+  const handleFinish = () => {
+    if (typeof onComplete === 'function') {
+      onComplete();
+    } else if (typeof onFinish === 'function') {
+      onFinish();
+    }
+  };
 
   useEffect(() => {
     // Animate the path drawing from 0 to 1 over 2.2 seconds
     let startTime: number | null = null;
     const duration = 2200; // ms
-
+    let timeoutId: NodeJS.Timeout | null = null;
     let animationFrameId: number;
 
     const animate = (timestamp: number) => {
@@ -32,8 +41,8 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
       } else {
         setShowText(true);
         // Automatic redirection: transition to agenda without any user click
-        setTimeout(() => {
-          onComplete();
+        timeoutId = setTimeout(() => {
+          handleFinish();
         }, 800);
       }
     };
@@ -42,11 +51,21 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
 
     return () => {
       cancelAnimationFrame(animationFrameId);
+      if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [onComplete]);
+  }, [onComplete, onFinish]);
 
   return (
     <div className="fixed inset-0 z-50 bg-[#121214] flex flex-col items-center justify-center p-6 select-none overflow-hidden">
+      {/* Skip button */}
+      <button
+        type="button"
+        onClick={handleFinish}
+        className="absolute top-6 right-6 px-3.5 py-1.5 rounded-full bg-[#1E1E24]/80 hover:bg-[#2A2A34] border border-[#2E2E38] text-xs text-[#A0A0AB] hover:text-white transition-all cursor-pointer z-20"
+      >
+        Passer
+      </button>
+
       {/* Background ambient lighting */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#6C5CE7]/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-[#55E6C1]/10 rounded-full blur-[100px] pointer-events-none" />

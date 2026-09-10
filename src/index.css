@@ -1,1 +1,72 @@
 @import "tailwindcss";
+
+:root {
+  --bg-app: #121214;
+  --bg-surface: #18181B;
+  --bg-surface-elevated: #1E1E24;
+  --bg-subtle: #121214;
+  --border-app: #27272A;
+  --border-card: #2E2E38;
+  --border-highlight: #3E3E4C;
+  --text-primary: #EDEDED;
+  --text-secondary: #A0A0AB;
+  --text-muted: #71717A;
+  --header-bg: rgba(20, 20, 23, 0.85);
+  --nav-bg: rgba(20, 20, 23, 0.88);
+  --input-bg: #121214;
+  --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+}
+
+html.light {
+  --bg-app: #F6F7F9;
+  --bg-surface: #FFFFFF;
+  --bg-surface-elevated: #F8F9FA;
+  --bg-subtle: #EDF0F3;
+  --border-app: #E2E8F0;
+  --border-card: #E4E7EB;
+  --border-highlight: #CBD5E1;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+  --header-bg: rgba(255, 255, 255, 0.85);
+  --nav-bg: rgba(255, 255, 255, 0.88);
+  --input-bg: #F8F9FA;
+  --card-shadow: 0 2px 14px -2px rgba(15, 23, 42, 0.05);
+}
+
+body {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  transition: background-color 0.25s ease, color 0.25s ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Luma Card Styles */
+.luma-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-card);
+  box-shadow: var(--card-shadow);
+  border-radius: 1.25rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luma-card:hover {
+  border-color: var(--border-highlight);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(140, 140, 160, 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 140, 160, 0.35);
+}
+

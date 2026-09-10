@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
-import { TimeBlock, Project } from './types';
-import { INITIAL_TIME_BLOCKS, INITIAL_PROJECTS } from './data/mockData';
+import { TimeBlock, Project, DomainConfig } from './types';
+import { INITIAL_TIME_BLOCKS, INITIAL_PROJECTS, DOMAINS } from './data/mockData';
 import {
   signInWithGoogle,
   signInGuest,
@@ -9,9 +9,13 @@ import {
   onAuthUserChanged,
   subscribeToUserTimeBlocks,
   subscribeToUserProjects,
+  subscribeToUserCategories,
   saveUserTimeBlock,
   deleteUserTimeBlock,
   saveUserProject,
+  saveUserCategory,
+  deleteUserCategory,
+  seedUserDefaultCategories,
   seedUserTemplates,
   clearUserTimeBlocks,
 } from './lib/firebase';
@@ -26,12 +30,14 @@ import { ProjectsDashboard } from './components/ProjectsDashboard';
 import { FlutterCodeViewer } from './components/FlutterCodeViewer';
 import { AddBlockModal } from './components/AddBlockModal';
 import { AddProjectModal } from './components/AddProjectModal';
+import { ManagePillarsModal } from './components/ManagePillarsModal';
 import {
   Calendar,
   Layers,
   Code2,
   CheckCircle2,
   AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 
 export default function App() {
@@ -49,14 +55,28 @@ export default function App() {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  // Data State (Initialement vide sans données de test par défaut selon la demande)
+  // Data State
   const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [categories, setCategories] = useState<DomainConfig[]>(() =>
+    Object.values(DOMAINS).map((d) => ({
+      id: d.id,
+      name: d.name,
+      label: d.label,
+      color: d.color,
+      colorSecondary: d.colorSecondary,
+      bgRgba: d.bgRgba,
+      borderRgba: d.borderRgba,
+      iconName: d.id === 'tech' ? 'Terminal' : d.id === 'art' ? 'Flame' : 'Compass',
+    }))
+  );
   const [firestoreStatus, setFirestoreStatus] = useState<'connected' | 'error' | 'syncing'>('connected');
 
   // Modals
   const [isAddBlockOpen, setIsAddBlockOpen] = useState(false);
+  const [editingBlock, setEditingBlock] = useState<TimeBlock | null>(null);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
+  const [isManagePillarsOpen, setIsManagePillarsOpen] = useState(false);
 
   // 1. Écoute de l'état d'authentification Firebase
   useEffect(() => {
@@ -75,7 +95,6 @@ export default function App() {
     try {
       const hasCompleted = localStorage.getItem('spectrum_onboarding_v1');
       if (!hasCompleted) {
-        // Déclencher après la fin du splash screen
         const timer = setTimeout(() => {
           setShowOnboarding(true);
         }, 1200);
@@ -87,7 +106,7 @@ export default function App() {
   // 3. Synchronisation temps réel Cloud Firestore avec scoping users/{userId}/...
   useEffect(() => {
     if (!user) {
-      // Si déconnecté, données locales vides
+      // Si déconnecté, données locales initiales
       setTimeBlocks([]);
       setProjects([]);
       setFirestoreStatus('connected');
@@ -97,8 +116,10 @@ export default function App() {
     setFirestoreStatus('syncing');
     let unsubscribeBlocks: (() => void) | undefined;
     let unsubscribeProjects: (() => void) | undefined;
+    let unsubscribeCategories: (() => void) | undefined;
 
     try {
+      // Blocs
       unsubscribeBlocks = subscribeToUserTimeBlocks(
         user.uid,
         (remoteBlocks) => {
@@ -111,6 +132,7 @@ export default function App() {
         }
       );
 
+      // Projets
       unsubscribeProjects = subscribeToUserProjects(
         user.uid,
         (remoteProjects) => {
@@ -122,6 +144,25 @@ export default function App() {
           setFirestoreStatus('error');
         }
       );
+
+      // Piliers dynamiques / Categories
+      unsubscribeCategories = subscribeToUserCategories(
+        user.uid,
+        async (remoteCategories) => {
+          if (remoteCategories.length === 0) {
+            try {
+              await seedUserDefaultCategories(user.uid);
+            } catch (seedErr) {
+              console.warn('Erreur initialisation catégories utilisateur:', seedErr);
+            }
+          } else {
+            setCategories(remoteCategories);
+          }
+        },
+        (err) => {
+          console.warn('Erreur écoute catégories utilisateur:', err);
+        }
+      );
     } catch (err) {
       console.error('Erreur attachement Firestore listeners:', err);
       setFirestoreStatus('error');
@@ -130,6 +171,7 @@ export default function App() {
     return () => {
       unsubscribeBlocks?.();
       unsubscribeProjects?.();
+      unsubscribeCategories?.();
     };
   }, [user]);
 
@@ -140,7 +182,6 @@ export default function App() {
       await signInWithGoogle();
     } catch (err: unknown) {
       console.warn('Google Sign-In popup error:', err);
-      // Détecter si les popups sont bloqués par l'environnement
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes('popup-blocked') || message.includes('cancelled')) {
         setAuthError('La fenêtre de connexion Google a été fermée ou bloquée par le navigateur.');
@@ -176,6 +217,11 @@ export default function App() {
     setCurrentView('activity');
   };
 
+  const handleOpenEditModal = (block: TimeBlock) => {
+    setEditingBlock(block);
+    setIsAddBlockOpen(true);
+  };
+
   const handleUpdateBlock = async (updated: TimeBlock) => {
     setTimeBlocks((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
     if (user) {
@@ -204,6 +250,27 @@ export default function App() {
         setFirestoreStatus('connected');
       } catch (err) {
         console.error('Erreur création bloc Firestore:', err);
+        setFirestoreStatus('error');
+      }
+    }
+  };
+
+  const handleAddBlocks = async (newBlocksData: Omit<TimeBlock, 'id'>[]) => {
+    const newBlocks: TimeBlock[] = newBlocksData.map((bData, idx) => ({
+      ...bData,
+      id: `block-${Date.now()}-${idx}`,
+    }));
+    setTimeBlocks((prev) => [...prev, ...newBlocks]);
+
+    if (user) {
+      setFirestoreStatus('syncing');
+      try {
+        for (const b of newBlocks) {
+          await saveUserTimeBlock(user.uid, b);
+        }
+        setFirestoreStatus('connected');
+      } catch (err) {
+        console.error('Erreur création blocs multiples Firestore:', err);
         setFirestoreStatus('error');
       }
     }
@@ -267,50 +334,79 @@ export default function App() {
     setProjects((prev) => prev.map((p) => (p.id === projectId ? updatedProject : p)));
 
     if (user) {
-      setFirestoreStatus('syncing');
       try {
         await saveUserProject(user.uid, updatedProject);
-        setFirestoreStatus('connected');
       } catch (err) {
-        console.error('Erreur mise à jour milestone Firestore:', err);
-        setFirestoreStatus('error');
+        console.error('Erreur update milestone Firestore:', err);
       }
     }
   };
 
-  // Amorçage volontaire par l'utilisateur (si demandé)
-  const handleSeedTemplates = async () => {
-    if (user) {
-      setFirestoreStatus('syncing');
-      try {
-        await seedUserTemplates(user.uid, INITIAL_TIME_BLOCKS, INITIAL_PROJECTS);
-        setTimeBlocks(INITIAL_TIME_BLOCKS);
-        setProjects(INITIAL_PROJECTS);
-        setFirestoreStatus('connected');
-      } catch (err) {
-        console.error('Erreur seeding modèles utilisateur:', err);
-        setFirestoreStatus('error');
+  // Dynamic Pillars / Categories CRUD
+  const handleSaveCategory = async (cat: DomainConfig) => {
+    setCategories((prev) => {
+      const idx = prev.findIndex((c) => c.id === cat.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = cat;
+        return copy;
       }
-    } else {
+      return [...prev, cat];
+    });
+
+    if (user) {
+      try {
+        await saveUserCategory(user.uid, cat);
+      } catch (err) {
+        console.error('Erreur sauvegarde pilier Firestore:', err);
+      }
+    }
+  };
+
+  const handleDeleteCategory = async (catId: string) => {
+    setCategories((prev) => prev.filter((c) => c.id !== catId));
+
+    if (user) {
+      try {
+        await deleteUserCategory(user.uid, catId);
+      } catch (err) {
+        console.error('Erreur suppression pilier Firestore:', err);
+      }
+    }
+  };
+
+  // Seed default templates
+  const handleSeedTemplates = async () => {
+    if (!user) {
       setTimeBlocks(INITIAL_TIME_BLOCKS);
       setProjects(INITIAL_PROJECTS);
+      return;
+    }
+
+    setFirestoreStatus('syncing');
+    try {
+      await seedUserTemplates(user.uid, INITIAL_TIME_BLOCKS, INITIAL_PROJECTS);
+      await seedUserDefaultCategories(user.uid);
+      setFirestoreStatus('connected');
+    } catch (err) {
+      console.error('Erreur injection template Firestore:', err);
+      setFirestoreStatus('error');
     }
   };
 
-  const activeBlock = timeBlocks.find((b) => b.id === selectedBlockId) || (timeBlocks.length > 0 ? timeBlocks[0] : null);
+  const activeBlock = timeBlocks.find((b) => b.id === selectedBlockId) || null;
 
   return (
-    <div className="min-h-screen bg-[#121214] text-[#EDEDED] font-['Plus_Jakarta_Sans',sans-serif] flex flex-col selection:bg-[#6C5CE7]/30">
-      {/* 1. Splash Screen Overlay au lancement */}
+    <div className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)] font-['Plus_Jakarta_Sans',sans-serif] flex flex-col selection:bg-[#6C5CE7]/30 transition-colors">
+      {/* 1. SplashScreen au chargement initial */}
       {showSplash && (
         <SplashScreen
-          onComplete={() => {
-            setShowSplash(false);
-          }}
+          onComplete={() => setShowSplash(false)}
+          onFinish={() => setShowSplash(false)}
         />
       )}
 
-      {/* 2. En-tête avec Authentification Google, Statut PWA & Sync */}
+      {/* 2. Top Header & Auth State */}
       <AuthHeader
         user={user}
         isAuthLoading={isAuthLoading}
@@ -318,35 +414,28 @@ export default function App() {
         onLoginGuest={handleLoginGuest}
         onLogout={handleLogout}
         onOpenOnboarding={() => setShowOnboarding(true)}
+        onOpenManagePillars={() => setIsManagePillarsOpen(true)}
         firestoreStatus={firestoreStatus}
       />
 
-      {/* 3. Bannière d'erreur d'authentification le cas échéant */}
+      {/* 3. Message d'erreur d'authentification si popup bloqué */}
       {authError && (
-        <div className="bg-[#2D1B1B] border-b border-[#FF7675]/30 px-4 py-2 text-xs text-[#FF7675] flex items-center justify-between">
-          <div className="flex items-center gap-2 max-w-2xl">
+        <div className="bg-[#FF7675]/15 border-b border-[#FF7675]/30 px-4 py-2 text-xs text-[#FF7675] flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{authError}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleLoginGuest}
-              className="text-[11px] underline hover:text-white"
-            >
-              Session invité
-            </button>
-            <button
-              onClick={() => setAuthError(null)}
-              className="text-[11px] px-2 py-0.5 rounded bg-[#18181B] text-[#EDEDED]"
-            >
-              Fermer
-            </button>
-          </div>
+          <button
+            onClick={() => setAuthError(null)}
+            className="text-[11px] px-2 py-0.5 rounded bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--border-card)]"
+          >
+            Fermer
+          </button>
         </div>
       )}
 
       {/* 4. Navigation Desktop / Tablette (cachée sur smartphone grâce à la BottomNavBar) */}
-      <div className="hidden md:block bg-[#18181B] border-b border-[#27272A] px-4 py-2">
+      <div className="hidden md:block bg-[var(--bg-surface)] border-b border-[var(--border-app)] px-4 py-2 transition-colors">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
@@ -354,11 +443,11 @@ export default function App() {
               onClick={() => setCurrentView('agenda')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                 currentView === 'agenda'
-                  ? 'bg-[#121214] text-white border border-[#3E3E4A] shadow-sm'
-                  : 'text-[#A0A0AB] hover:text-white hover:bg-[#1E1E24]'
+                  ? 'bg-[#6C5CE7] text-white shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
               }`}
             >
-              <Calendar className="w-3.5 h-3.5 text-[#6C5CE7]" />
+              <Calendar className="w-3.5 h-3.5" />
               <span>Agenda Time-Blocking</span>
             </button>
 
@@ -367,11 +456,11 @@ export default function App() {
               onClick={() => setCurrentView('bento')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                 currentView === 'bento'
-                  ? 'bg-[#121214] text-white border border-[#3E3E4A] shadow-sm'
-                  : 'text-[#A0A0AB] hover:text-white hover:bg-[#1E1E24]'
+                  ? 'bg-[#6C5CE7] text-white shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
               }`}
             >
-              <Layers className="w-3.5 h-3.5 text-[#55E6C1]" />
+              <Layers className="w-3.5 h-3.5" />
               <span>Dashboard Projets (Bento)</span>
             </button>
 
@@ -380,11 +469,11 @@ export default function App() {
               onClick={() => setCurrentView('activity')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                 currentView === 'activity'
-                  ? 'bg-[#121214] text-white border border-[#3E3E4A] shadow-sm'
-                  : 'text-[#A0A0AB] hover:text-white hover:bg-[#1E1E24]'
+                  ? 'bg-[#6C5CE7] text-white shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
               }`}
             >
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#FF7675]" />
+              <CheckCircle2 className="w-3.5 h-3.5" />
               <span>Fiche d'Activité & Focus</span>
             </button>
 
@@ -394,7 +483,7 @@ export default function App() {
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                 currentView === 'code'
                   ? 'bg-[#6C5CE7] text-white shadow-sm'
-                  : 'text-[#A0A0AB] hover:text-white hover:bg-[#1E1E24]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
               }`}
             >
               <Code2 className="w-3.5 h-3.5" />
@@ -402,12 +491,20 @@ export default function App() {
             </button>
           </div>
 
-          <div className="text-[11px] font-mono text-[#71717A]">
-            {user ? (
-              <span className="text-[#55E6C1]">users/{user.uid.substring(0, 6)}…/timeblocks</span>
-            ) : (
-              <span>Non synchronisé (Session locale)</span>
-            )}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsManagePillarsOpen(true)}
+              className="px-2.5 py-1 rounded-lg text-xs font-medium bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-highlight)] transition"
+            >
+              Gérer les Piliers ({categories.length})
+            </button>
+            <div className="text-[11px] font-mono text-[var(--text-muted)]">
+              {user ? (
+                <span className="text-[#55E6C1]">users/{user.uid.substring(0, 6)}…</span>
+              ) : (
+                <span>Session locale</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -415,7 +512,7 @@ export default function App() {
       {/* 5. Notification de connexion si l'utilisateur est anonyme / non connecté */}
       {!user && !isAuthLoading && (
         <div className="bg-gradient-to-r from-[#6C5CE7]/15 to-[#00CEC9]/15 border-b border-[#6C5CE7]/25 px-4 py-2 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-[#EDEDED]">
+          <div className="flex items-center gap-2 text-[var(--text-primary)]">
             <span className="w-2 h-2 rounded-full bg-[#00CEC9] animate-pulse" />
             <span>
               Connectez votre compte Google pour sauvegarder vos blocs et projets dans votre base Firestore personnelle (<strong>users/{'{userId}'}/timeblocks</strong>).
@@ -423,7 +520,7 @@ export default function App() {
           </div>
           <button
             onClick={handleLoginWithGoogle}
-            className="shrink-0 px-3 py-1 rounded-xl bg-white text-[#121214] font-bold text-xs hover:bg-gray-100 transition shadow"
+            className="shrink-0 px-3 py-1 rounded-xl bg-[#6C5CE7] text-white font-bold text-xs hover:bg-[#5b4bc4] transition shadow"
           >
             Connexion Google
           </button>
@@ -438,10 +535,15 @@ export default function App() {
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             onSelectBlock={handleSelectBlock}
-            onOpenAddModal={() => setIsAddBlockOpen(true)}
+            onOpenAddModal={() => {
+              setEditingBlock(null);
+              setIsAddBlockOpen(true);
+            }}
             onOpenProjects={() => setCurrentView('bento')}
             onSeedTemplates={handleSeedTemplates}
             onClearBlocks={handleClearBlocks}
+            categories={categories}
+            onOpenManagePillars={() => setIsManagePillarsOpen(true)}
           />
         )}
 
@@ -450,17 +552,26 @@ export default function App() {
             block={activeBlock}
             onBack={() => setCurrentView('agenda')}
             onUpdateBlock={handleUpdateBlock}
-            onOpenAddModal={() => setIsAddBlockOpen(true)}
+            onOpenAddModal={() => {
+              setEditingBlock(null);
+              setIsAddBlockOpen(true);
+            }}
+            onOpenEditModal={handleOpenEditModal}
+            categories={categories}
           />
         )}
 
         {currentView === 'bento' && (
           <ProjectsDashboard
             projects={projects}
+            timeBlocks={timeBlocks}
             onBackToAgenda={() => setCurrentView('agenda')}
             onOpenAddModal={() => setIsAddProjectOpen(true)}
+            onSelectBlock={handleSelectBlock}
             onToggleMilestone={handleToggleMilestone}
             onSeedProjects={handleSeedTemplates}
+            categories={categories}
+            onOpenManagePillars={() => setIsManagePillarsOpen(true)}
           />
         )}
 
@@ -477,6 +588,7 @@ export default function App() {
           if (currentView === 'bento') {
             setIsAddProjectOpen(true);
           } else {
+            setEditingBlock(null);
             setIsAddBlockOpen(true);
           }
         }}
@@ -494,18 +606,36 @@ export default function App() {
         isAuthenticated={!!user}
       />
 
-      {/* 10. Modals d'ajout de bloc de temps et de projet */}
+      {/* 10. Modals d'ajout et d'édition de bloc de temps et de projet */}
       <AddBlockModal
         isOpen={isAddBlockOpen}
-        onClose={() => setIsAddBlockOpen(false)}
+        onClose={() => {
+          setIsAddBlockOpen(false);
+          setEditingBlock(null);
+        }}
         onAddBlock={handleAddBlock}
+        onAddBlocks={handleAddBlocks}
+        initialBlock={editingBlock}
+        onUpdateBlock={handleUpdateBlock}
         projects={projects}
+        categories={categories}
+        defaultDate={selectedDate}
       />
 
       <AddProjectModal
         isOpen={isAddProjectOpen}
         onClose={() => setIsAddProjectOpen(false)}
-        onAddProject={handleAddProject}
+        onAdd={handleAddProject}
+        categories={categories}
+      />
+
+      {/* 11. Modal Gestion Personnalisée des Piliers */}
+      <ManagePillarsModal
+        isOpen={isManagePillarsOpen}
+        onClose={() => setIsManagePillarsOpen(false)}
+        categories={categories}
+        onSaveCategory={handleSaveCategory}
+        onDeleteCategory={handleDeleteCategory}
       />
     </div>
   );

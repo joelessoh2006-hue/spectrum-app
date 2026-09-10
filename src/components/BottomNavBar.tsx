@@ -26,7 +26,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   return (
     <nav
       id="mobile-bottom-navigation"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#141417]/95 backdrop-blur-xl border-t border-[#27272A] px-3 py-1.5 shadow-2xl pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--nav-bg)] backdrop-blur-2xl border-t border-[var(--border-app)] px-3 py-1.5 shadow-2xl pb-[max(0.5rem,env(safe-area-inset-bottom))] transition-colors"
       aria-label="Navigation mobile principale"
     >
       <div className="flex items-center justify-between max-w-md mx-auto relative">
@@ -38,10 +38,10 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
               key={item.id}
               id={`nav-btn-${item.id}`}
               onClick={() => onNavigate(item.id)}
-              className={`flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-xl transition-all duration-200 active:scale-95 ${
+              className={`flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-2xl transition-all duration-200 active:scale-95 ${
                 isActive
-                  ? 'text-white'
-                  : 'text-[#8E8E93] hover:text-[#D4D4D8]'
+                  ? 'text-[#6C5CE7] font-bold'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium'
               }`}
             >
               <div className="relative">
@@ -50,26 +50,22 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
                   <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#FF7675] animate-pulse" />
                 )}
               </div>
-              <span
-                className={`text-[10px] tracking-tight mt-1 whitespace-nowrap ${
-                  isActive ? 'font-bold text-white' : 'font-medium'
-                }`}
-              >
+              <span className="text-[10px] tracking-tight mt-1 whitespace-nowrap">
                 {item.label}
               </span>
               {isActive && (
-                <span className="w-1 h-1 rounded-full bg-[#6C5CE7] mt-0.5" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#6C5CE7] mt-0.5 shadow-sm shadow-[#6C5CE7]/50" />
               )}
             </button>
           );
         })}
 
-        {/* Central Quick Add Action Button */}
+        {/* Central Quick Add Action Button (Luma / iOS Vibrant Floating Button) */}
         <div className="px-1 shrink-0 -mt-5">
           <button
             id="mobile-quick-add-btn"
             onClick={onOpenAddModal}
-            className="w-12 h-12 rounded-full bg-gradient-to-tr from-[#6C5CE7] to-[#00CEC9] text-white flex items-center justify-center shadow-lg shadow-[#6C5CE7]/30 hover:scale-105 active:scale-95 transition-transform border-2 border-[#141417]"
+            className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#6C5CE7] to-[#00CEC9] text-white flex items-center justify-center shadow-lg shadow-[#6C5CE7]/35 hover:scale-105 active:scale-95 transition-transform border-2 border-[var(--bg-surface)]"
             title="Ajouter un bloc de temps ou un projet"
             aria-label="Ajouter"
           >
@@ -85,27 +81,23 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
               key={item.id}
               id={`nav-btn-${item.id}`}
               onClick={() => onNavigate(item.id)}
-              className={`flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-xl transition-all duration-200 active:scale-95 ${
+              className={`flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-2xl transition-all duration-200 active:scale-95 ${
                 isActive
-                  ? 'text-white'
-                  : 'text-[#8E8E93] hover:text-[#D4D4D8]'
+                  ? 'text-[#00CEC9] dark:text-[#55E6C1] font-bold'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium'
               }`}
             >
               <div className="relative">
-                <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110 text-[#00CEC9]' : ''}`} />
+                <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110 text-[#00CEC9] dark:text-[#55E6C1]' : ''}`} />
                 {item.badge && (
                   <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#FF7675] animate-pulse" />
                 )}
               </div>
-              <span
-                className={`text-[10px] tracking-tight mt-1 whitespace-nowrap ${
-                  isActive ? 'font-bold text-white' : 'font-medium'
-                }`}
-              >
+              <span className="text-[10px] tracking-tight mt-1 whitespace-nowrap">
                 {item.label}
               </span>
               {isActive && (
-                <span className="w-1 h-1 rounded-full bg-[#00CEC9] mt-0.5" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00CEC9] dark:bg-[#55E6C1] mt-0.5 shadow-sm shadow-[#00CEC9]/50" />
               )}
             </button>
           );

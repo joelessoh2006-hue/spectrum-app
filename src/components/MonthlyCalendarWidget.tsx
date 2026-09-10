@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TimeBlock, DomainId } from '../types';
+import { TimeBlock, DomainId, DomainConfig } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Sparkles } from 'lucide-react';
 
@@ -7,6 +7,7 @@ interface MonthlyCalendarWidgetProps {
   selectedDate: Date;
   onSelectDate: (date: Date) => void;
   blocks: TimeBlock[];
+  categories?: DomainConfig[];
 }
 
 const MONTH_NAMES = [
@@ -20,6 +21,7 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
   selectedDate,
   onSelectDate,
   blocks,
+  categories,
 }) => {
   // Calendar browsing month/year
   const [viewYear, setViewYear] = useState<number>(selectedDate.getFullYear());
@@ -96,19 +98,30 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
     );
   };
 
+  const getDomainColor = (dId: string): string => {
+    const found = categories?.find((c) => c.id === dId);
+    if (found) return found.color;
+    const legacy = (DOMAINS as Record<string, DomainConfig>)[dId];
+    return legacy ? legacy.color : '#6C5CE7';
+  };
+
+  const legendItems = categories && categories.length > 0
+    ? categories
+    : Object.values(DOMAINS);
+
   return (
-    <div className="bg-[#1E1E24] border border-[#2E2E38] rounded-[20px] p-4 md:p-5 shadow-xl transition-all">
+    <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-4 md:p-5 shadow-sm transition-all">
       {/* Header: Month / Year Title & Nav buttons */}
-      <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-[#2E2E38]">
+      <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-[var(--border-card)]">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-[#6C5CE7]/15 border border-[#6C5CE7]/30 flex items-center justify-center text-[#6C5CE7]">
             <CalendarIcon className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white tracking-tight">
+            <h2 className="text-base font-bold text-[var(--text-primary)] tracking-tight">
               {MONTH_NAMES[viewMonth]} {viewYear}
             </h2>
-            <p className="text-[11px] text-[#A0A0AB]">
+            <p className="text-[11px] text-[var(--text-secondary)]">
               Cliquez sur un jour pour filtrer par piliers
             </p>
           </div>
@@ -118,14 +131,14 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
           <button
             type="button"
             onClick={handleGoToToday}
-            className="px-2.5 py-1 text-[11px] font-semibold text-[#55E6C1] hover:text-white bg-[#55E6C1]/10 hover:bg-[#55E6C1]/20 border border-[#55E6C1]/30 rounded-lg transition-all"
+            className="px-2.5 py-1 text-[11px] font-semibold text-[#6C5CE7] hover:bg-[#6C5CE7]/10 border border-[#6C5CE7]/30 rounded-xl transition-all active:scale-95"
           >
             Aujourd'hui
           </button>
           <button
             type="button"
             onClick={handlePrevMonth}
-            className="p-1.5 text-[#A0A0AB] hover:text-white bg-[#121214] hover:bg-[#282830] rounded-lg border border-[#2E2E38] transition-all"
+            className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] rounded-xl border border-[var(--border-card)] transition-all active:scale-95"
             title="Mois précédent"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -133,7 +146,7 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
           <button
             type="button"
             onClick={handleNextMonth}
-            className="p-1.5 text-[#A0A0AB] hover:text-white bg-[#121214] hover:bg-[#282830] rounded-lg border border-[#2E2E38] transition-all"
+            className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] rounded-xl border border-[var(--border-card)] transition-all active:scale-95"
             title="Mois suivant"
           >
             <ChevronRight className="w-4 h-4" />
@@ -147,7 +160,7 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
           <div
             key={wd}
             className={`text-[11px] font-bold uppercase tracking-wider py-1 ${
-              i >= 5 ? 'text-[#71717A]' : 'text-[#A0A0AB]'
+              i >= 5 ? 'text-[var(--text-muted)]' : 'text-[var(--text-secondary)]'
             }`}
           >
             {wd}
@@ -163,7 +176,7 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
           return (
             <div
               key={`prev-${prevDay}`}
-              className="h-10 md:h-11 flex flex-col items-center justify-center rounded-xl text-xs text-[#3E3E4C] select-none pointer-events-none"
+              className="h-10 md:h-11 flex flex-col items-center justify-center rounded-xl text-xs text-[var(--text-muted)] opacity-40 select-none pointer-events-none"
             >
               <span>{prevDay}</span>
             </div>
@@ -188,10 +201,10 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
               }}
               className={`group relative h-10 md:h-11 flex flex-col items-center justify-center rounded-xl text-xs transition-all duration-150 ${
                 selected
-                  ? 'bg-[#6C5CE7] text-white font-bold shadow-lg shadow-[#6C5CE7]/35 ring-1 ring-white/40 scale-105 z-10'
+                  ? 'bg-[#6C5CE7] text-white font-bold shadow-md shadow-[#6C5CE7]/35 ring-1 ring-white/40 scale-105 z-10'
                   : currentDay
-                  ? 'bg-[#121214] text-[#55E6C1] font-bold border border-[#55E6C1]/50 hover:bg-[#282830]'
-                  : 'bg-[#121214]/60 text-[#EDEDED] hover:bg-[#282830] hover:text-white border border-[#2E2E38]/50'
+                  ? 'bg-[var(--bg-surface-elevated)] text-[#6C5CE7] font-bold border-2 border-[#6C5CE7]'
+                  : 'bg-[var(--bg-surface-elevated)] text-[var(--text-primary)] hover:border-[var(--border-highlight)] border border-[var(--border-card)]'
               }`}
             >
               <span className="leading-none">{day}</span>
@@ -200,13 +213,13 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
               {hasBlocks && (
                 <div className="flex items-center gap-0.5 mt-1">
                   {Array.from(domains).map((dId) => {
-                    const cfg = DOMAINS[dId];
+                    const color = getDomainColor(dId);
                     return (
                       <span
                         key={dId}
                         className="w-1.5 h-1.5 rounded-full"
                         style={{
-                          backgroundColor: selected ? '#FFFFFF' : cfg.color,
+                          backgroundColor: selected ? '#FFFFFF' : color,
                         }}
                       />
                     );
@@ -219,24 +232,21 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
       </div>
 
       {/* Legend below the calendar */}
-      <div className="mt-3 pt-3 border-t border-[#2E2E38] flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#A0A0AB]">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#6C5CE7]" />
-            <span>Tech / Dev</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#FF7675]" />
-            <span>Art / Rap</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#55E6C1]" />
-            <span>Curiosité</span>
-          </div>
+      <div className="mt-3 pt-3 border-t border-[var(--border-card)] flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--text-secondary)]">
+        <div className="flex flex-wrap items-center gap-3">
+          {legendItems.slice(0, 4).map((cat) => (
+            <div key={cat.id} className="flex items-center gap-1.5">
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: cat.color }}
+              />
+              <span className="truncate max-w-[110px]">{cat.name}</span>
+            </div>
+          ))}
         </div>
 
-        <div className="font-mono text-[#71717A]">
-          Firestore Cloud Sync
+        <div className="font-mono text-[10px] text-[var(--text-muted)]">
+          Cloud Firestore
         </div>
       </div>
     </div>
