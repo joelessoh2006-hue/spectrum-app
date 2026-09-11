@@ -45,21 +45,28 @@ export const CategoriesExplorationGrid: React.FC<CategoriesExplorationGridProps>
 
       {/* Grid of Luma Category Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {categories.map((cat) => {
+        {categories.map((cat, index) => {
           const Icon = getPillarIcon(cat.iconName);
           const pillarBlocks = blocks.filter((b) => b.domain === cat.id);
           const pillarProjects = projects.filter((p) => p.domain === cat.id);
 
           return (
             <div
-              key={cat.id}
-              onClick={() => onSelectCategory?.(cat.id)}
+              key={cat.id || index}
+              onClick={(e) => {
+                e.preventDefault();
+                if (onQuickAddBlockForPillar && cat?.id) {
+                  onQuickAddBlockForPillar(cat.id);
+                } else if (onSelectCategory && cat?.id) {
+                  onSelectCategory(cat.id);
+                }
+              }}
               className="group relative p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-card)] hover:border-[var(--border-highlight)] transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer overflow-hidden flex flex-col justify-between"
             >
               {/* Subtle top accent gradient */}
               <div
                 className="absolute top-0 left-0 right-0 h-1 opacity-80"
-                style={{ backgroundColor: cat.color }}
+                style={{ backgroundColor: cat.color || '#6C5CE7' }}
               />
 
               <div>
@@ -68,8 +75,8 @@ export const CategoriesExplorationGrid: React.FC<CategoriesExplorationGridProps>
                   <div
                     className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm transition-transform duration-200 group-hover:scale-105"
                     style={{
-                      backgroundColor: `${cat.color}18`,
-                      color: cat.color,
+                      backgroundColor: `${cat.color || '#6C5CE7'}18`,
+                      color: cat.color || '#6C5CE7',
                     }}
                   >
                     <Icon className="w-6 h-6 stroke-[2]" />
@@ -77,12 +84,17 @@ export const CategoriesExplorationGrid: React.FC<CategoriesExplorationGridProps>
 
                   {onQuickAddBlockForPillar && (
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onQuickAddBlockForPillar(cat.id);
+                        e.preventDefault();
+                        if (cat?.id) {
+                          onQuickAddBlockForPillar(cat.id);
+                        }
                       }}
-                      className="w-7 h-7 rounded-xl flex items-center justify-center bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-card)] transition active:scale-95"
-                      title={`Planifier un bloc pour ${cat.name}`}
+                      className="w-7 h-7 rounded-xl flex items-center justify-center bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-card)] transition active:scale-95 cursor-pointer"
+                      title={`Planifier un bloc pour ${cat.name || 'ce pilier'}`}
+                      aria-label={`Ajouter un bloc pour ${cat.name || 'ce pilier'}`}
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
@@ -91,7 +103,7 @@ export const CategoriesExplorationGrid: React.FC<CategoriesExplorationGridProps>
 
                 {/* Title & Label */}
                 <h4 className="font-bold text-sm text-[var(--text-primary)] tracking-tight group-hover:text-[#6C5CE7] transition">
-                  {cat.name}
+                  {cat.name || 'Pilier sans titre'}
                 </h4>
                 <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-1">
                   {cat.label || 'Axe multipotentiel'}

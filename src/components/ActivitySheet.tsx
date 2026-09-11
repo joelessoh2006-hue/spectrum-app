@@ -22,7 +22,7 @@ interface ActivitySheetProps {
   block?: TimeBlock | null;
   onBack: () => void;
   onUpdateBlock: (updatedBlock: TimeBlock) => void;
-  onOpenAddModal?: () => void;
+  onOpenAddModal?: (pillarId?: string) => void;
   onOpenEditModal?: (block: TimeBlock) => void;
   categories?: DomainConfig[];
 }
@@ -55,8 +55,9 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
             </button>
             {onOpenAddModal && (
               <button
-                onClick={onOpenAddModal}
-                className="px-4 py-2 rounded-xl bg-[#6C5CE7] text-white text-xs font-semibold hover:bg-[#5b4bc4] transition shadow-md shadow-[#6C5CE7]/20 active:scale-95"
+                type="button"
+                onClick={() => onOpenAddModal?.(block?.domain)}
+                className="px-4 py-2 rounded-xl bg-[#6C5CE7] text-white text-xs font-semibold hover:bg-[#5b4bc4] transition shadow-md shadow-[#6C5CE7]/20 active:scale-95 cursor-pointer"
               >
                 + Créer un bloc de temps
               </button>

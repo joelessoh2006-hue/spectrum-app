@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { DomainId, TimeBlock, Project, Subtask, DomainConfig } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { getPillarIcon } from '../utils/iconMap';
@@ -23,6 +23,7 @@ interface AddBlockModalProps {
   onAddBlock?: (block: Omit<TimeBlock, 'id'>) => void;
   onAddBlocks?: (blocks: Omit<TimeBlock, 'id'>[]) => void;
   initialBlock?: TimeBlock | null;
+  initialPillarId?: string | null;
   onUpdateBlock?: (block: TimeBlock) => void;
   defaultDate?: Date;
   projects?: Project[];
@@ -42,19 +43,35 @@ const WEEKDAYS = [
 
 type RecurrenceHorizon = '2_weeks' | '1_month' | '3_months' | 'custom_date';
 
+// Formatage sécurisé de date AAAA-MM-JJ
+const getFormattedDateString = (d?: Date | string): string => {
+  try {
+    const dateObj = d instanceof Date ? d : d ? new Date(d) : new Date();
+    if (isNaN(dateObj.getTime())) {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }
+    return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+  } catch {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+};
+
 export const AddBlockModal: React.FC<AddBlockModalProps> = ({
   isOpen,
   onClose,
   onAddBlock,
   onAddBlocks,
   initialBlock,
+  initialPillarId,
   onUpdateBlock,
   defaultDate,
   projects = [],
   categories,
 }) => {
   const activeCategories: DomainConfig[] = useMemo(() => {
-    if (categories && categories.length > 0) return categories;
+    if (Array.isArray(categories) && categories.length > 0) return categories;
     return Object.values(DOMAINS).map((d) => ({
       id: d.id,
       name: d.name,
@@ -69,9 +86,9 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
 
   // Form State
   const [title, setTitle] = useState(initialBlock?.title || '');
-  const [domain, setDomain] = useState<string>(
-    initialBlock?.domain || activeCategories[0]?.id || 'tech'
-  );
+  const [domain, setDomain] = useState<string>(() => {
+    return initialPillarId || initialBlock?.domain || activeCategories[0]?.id || 'tech';
+  });
   const [selectedProjectId, setSelectedProjectId] = useState<string>(initialBlock?.projectId || '');
   const [startTime, setStartTime] = useState(initialBlock?.startTime || '14:00');
   const [endTime, setEndTime] = useState(initialBlock?.endTime || '15:30');
@@ -87,8 +104,7 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
 
   const [scheduledDate, setScheduledDate] = useState<string>(() => {
     if (initialBlock?.date) return initialBlock.date;
-    const d = defaultDate || new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return getFormattedDateString(defaultDate);
   });
 
   // Recurring days (Par défaut: Lundi à Vendredi [1, 2, 3, 4, 5])
@@ -104,19 +120,23 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
   const [customEndDate, setCustomEndDate] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() + 30);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return getFormattedDateString(d);
   });
 
   // Dynamic Subtasks / Checklist
   const [subtasks, setSubtasks] = useState<Subtask[]>(() => {
     if (initialBlock?.subtasks && initialBlock.subtasks.length > 0) {
-      return initialBlock.subtasks;
+      return initialBlock.subtasks.map((s) => ({
+        id: s.id || `st-${Math.random()}`,
+        text: s.text || '',
+        completed: Boolean(s.completed),
+      }));
     }
     if (initialBlock?.checklist && initialBlock.checklist.length > 0) {
       return initialBlock.checklist.map((c) => ({
-        id: c.id,
-        text: c.title,
-        completed: c.isCompleted,
+        id: c.id || `st-${Math.random()}`,
+        text: c.title || '',
+        completed: Boolean(c.isCompleted),
       }));
     }
     return [
@@ -125,6 +145,70 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
     ];
   });
   const [newSubtaskText, setNewSubtaskText] = useState('');
+
+  // Synchronisation dynamique à chaque ouverture de la modale ou changement de pilier ciblé
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (initialBlock) {
+      setTitle(initialBlock.title || '');
+      setDomain(initialBlock.domain || initialPillarId || activeCategories[0]?.id || 'tech');
+      setSelectedProjectId(initialBlock.projectId || '');
+      setStartTime(initialBlock.startTime || '14:00');
+      setEndTime(initialBlock.endTime || '15:30');
+      setGlobalObjective(initialBlock.globalObjective || '');
+      setIsSpecificDate(!initialBlock.isRecurring);
+      setScheduledDate(initialBlock.date || getFormattedDateString(defaultDate));
+      setSelectedDays(
+        initialBlock.recurringDays && initialBlock.recurringDays.length > 0
+          ? initialBlock.recurringDays
+          : [1, 2, 3, 4, 5]
+      );
+      if (initialBlock.subtasks && initialBlock.subtasks.length > 0) {
+        setSubtasks(
+          initialBlock.subtasks.map((s) => ({
+            id: s.id || `st-${Math.random()}`,
+            text: s.text || '',
+            completed: Boolean(s.completed),
+          }))
+        );
+      } else if (initialBlock.checklist && initialBlock.checklist.length > 0) {
+        setSubtasks(
+          initialBlock.checklist.map((c) => ({
+            id: c.id || `st-${Math.random()}`,
+            text: c.title || '',
+            completed: Boolean(c.isCompleted),
+          }))
+        );
+      } else {
+        setSubtasks([
+          { id: `st-1`, text: 'Spécification et cadrage de la session', completed: false },
+          { id: `st-2`, text: 'Réalisation du livrable ou flow créatif', completed: false },
+        ]);
+      }
+    } else {
+      // Mode création d'un nouveau bloc
+      setTitle('');
+      // Résolution sécurisée du pilier
+      const targetPillar =
+        initialPillarId && activeCategories.some((c) => c.id === initialPillarId)
+          ? initialPillarId
+          : initialPillarId || activeCategories[0]?.id || 'tech';
+      setDomain(targetPillar);
+      setSelectedProjectId('');
+      setStartTime('14:00');
+      setEndTime('15:30');
+      setGlobalObjective('');
+      setIsSpecificDate(true);
+      setScheduledDate(getFormattedDateString(defaultDate));
+      setSelectedDays([1, 2, 3, 4, 5]);
+      setSubtasks([
+        { id: `st-1`, text: 'Spécification et cadrage de la session', completed: false },
+        { id: `st-2`, text: 'Réalisation du livrable ou flow créatif', completed: false },
+      ]);
+      setNewSubtaskText('');
+    }
+  }, [isOpen, initialBlock, initialPillarId, defaultDate, activeCategories]);
 
   if (!isOpen) return null;
 
@@ -306,7 +390,14 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
     onClose();
   };
 
-  const selectedCategory = activeCategories.find((c) => c.id === domain) || activeCategories[0];
+  const selectedCategory =
+    activeCategories.find((c) => c?.id === domain) ||
+    activeCategories[0] || {
+      id: 'tech',
+      name: 'Tech & Architecture',
+      color: '#6C5CE7',
+      iconName: 'Terminal',
+    };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
@@ -328,8 +419,10 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+            className="p-1.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
+            aria-label="Fermer la modale"
           >
             <X className="w-5 h-5" />
           </button>
@@ -342,26 +435,26 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
               Pilier Multipotentiel
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {activeCategories.map((cat) => {
+              {activeCategories.map((cat, index) => {
                 const isSelected = domain === cat.id;
                 const Icon = getPillarIcon(cat.iconName);
                 return (
                   <button
-                    key={cat.id}
+                    key={cat.id || index}
                     type="button"
                     onClick={() => setDomain(cat.id)}
-                    className={`py-2 px-3 rounded-2xl text-xs font-semibold border transition-all text-center flex items-center justify-center gap-2 ${
+                    className={`py-2 px-3 rounded-2xl text-xs font-semibold border transition-all text-center flex items-center justify-center gap-2 cursor-pointer ${
                       isSelected
                         ? 'text-white shadow-md'
                         : 'border-[var(--border-card)] text-[var(--text-secondary)] bg-[var(--bg-surface-elevated)] hover:border-[var(--border-highlight)]'
                     }`}
                     style={{
-                      backgroundColor: isSelected ? cat.color : undefined,
-                      borderColor: isSelected ? cat.color : undefined,
+                      backgroundColor: isSelected ? (cat.color || '#6C5CE7') : undefined,
+                      borderColor: isSelected ? (cat.color || '#6C5CE7') : undefined,
                     }}
                   >
                     <Icon className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{cat.name}</span>
+                    <span className="truncate">{cat.name || 'Pilier'}</span>
                   </button>
                 );
               })}

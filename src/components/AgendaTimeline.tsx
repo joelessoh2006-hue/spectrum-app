@@ -23,7 +23,7 @@ interface AgendaTimelineProps {
   selectedDate: Date;
   onSelectDate: (date: Date) => void;
   onSelectBlock: (blockId: string) => void;
-  onOpenAddModal: () => void;
+  onOpenAddModal: (pillarId?: string) => void;
   onOpenProjects: () => void;
   onSeedTemplates?: () => void;
   onClearBlocks?: () => void;
@@ -173,7 +173,8 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           categories={activeCategories}
           blocks={blocksForDay}
           onOpenManagePillars={onOpenManagePillars}
-          onQuickAddBlockForPillar={(catId) => onOpenAddModal()}
+          onQuickAddBlockForPillar={(catId) => onOpenAddModal(catId)}
+          onSelectCategory={(catId) => onOpenAddModal(catId)}
         />
       )}
 
@@ -213,9 +214,10 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           )}
 
           <button
+            type="button"
             id="agenda-add-block-btn"
-            onClick={onOpenAddModal}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-[#6C5CE7] hover:bg-[#5b4bc4] text-white text-xs md:text-sm font-bold shadow-md shadow-[#6C5CE7]/20 transition-all active:scale-95"
+            onClick={() => onOpenAddModal()}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-[#6C5CE7] hover:bg-[#5b4bc4] text-white text-xs md:text-sm font-bold shadow-md shadow-[#6C5CE7]/20 transition-all active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Nouveau Bloc</span>
@@ -270,8 +272,9 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
             <button
-              onClick={onOpenAddModal}
-              className="px-4 py-2 rounded-xl bg-[#6C5CE7] text-white text-xs font-bold shadow-md shadow-[#6C5CE7]/20 hover:bg-[#5b4bc4] transition active:scale-95 flex items-center gap-1.5"
+              type="button"
+              onClick={() => onOpenAddModal()}
+              className="px-4 py-2 rounded-xl bg-[#6C5CE7] text-white text-xs font-bold shadow-md shadow-[#6C5CE7]/20 hover:bg-[#5b4bc4] transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Créer mon premier bloc</span>
@@ -334,9 +337,11 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
                 </div>
 
                 <button
-                  onClick={onOpenAddModal}
-                  className="p-1.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition-colors border border-transparent hover:border-[var(--border-card)]"
+                  type="button"
+                  onClick={() => onOpenAddModal(cat.id)}
+                  className="p-1.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition-colors border border-transparent hover:border-[var(--border-card)] cursor-pointer"
                   title={`Ajouter un bloc ${cat.name}`}
+                  aria-label={`Ajouter un bloc ${cat.name}`}
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -349,8 +354,9 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
                     Aucune activité programmée pour ce jour.
                   </p>
                   <button
-                    onClick={onOpenAddModal}
-                    className="mt-2 text-[11px] font-semibold text-[#6C5CE7] hover:underline transition-colors"
+                    type="button"
+                    onClick={() => onOpenAddModal(cat.id)}
+                    className="mt-2 text-[11px] font-semibold text-[#6C5CE7] hover:underline transition-colors cursor-pointer"
                   >
                     + Planifier une session pour {cat.name}
                   </button>

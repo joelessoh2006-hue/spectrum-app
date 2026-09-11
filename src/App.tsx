@@ -31,6 +31,7 @@ import { FlutterCodeViewer } from './components/FlutterCodeViewer';
 import { AddBlockModal } from './components/AddBlockModal';
 import { AddProjectModal } from './components/AddProjectModal';
 import { ManagePillarsModal } from './components/ManagePillarsModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import {
   Calendar,
   Layers,
@@ -82,6 +83,7 @@ export default function App() {
   // Modals
   const [isAddBlockOpen, setIsAddBlockOpen] = useState(false);
   const [editingBlock, setEditingBlock] = useState<TimeBlock | null>(null);
+  const [selectedPillarForAdd, setSelectedPillarForAdd] = useState<string | null>(null);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
   const [isManagePillarsOpen, setIsManagePillarsOpen] = useState(false);
 
@@ -236,8 +238,21 @@ export default function App() {
     setCurrentView('activity');
   };
 
+  const handleOpenAddBlockModal = (pillarId?: string) => {
+    setEditingBlock(null);
+    setSelectedPillarForAdd(pillarId || null);
+    setIsAddBlockOpen(true);
+  };
+
+  const handleCloseAddBlockModal = () => {
+    setIsAddBlockOpen(false);
+    setEditingBlock(null);
+    setSelectedPillarForAdd(null);
+  };
+
   const handleOpenEditModal = (block: TimeBlock) => {
     setEditingBlock(block);
+    setSelectedPillarForAdd(block.domain || null);
     setIsAddBlockOpen(true);
   };
 
@@ -592,10 +607,7 @@ export default function App() {
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             onSelectBlock={handleSelectBlock}
-            onOpenAddModal={() => {
-              setEditingBlock(null);
-              setIsAddBlockOpen(true);
-            }}
+            onOpenAddModal={handleOpenAddBlockModal}
             onOpenProjects={() => setCurrentView('bento')}
             onSeedTemplates={handleSeedTemplates}
             onClearBlocks={handleClearBlocks}
@@ -609,10 +621,7 @@ export default function App() {
             block={activeBlock}
             onBack={() => setCurrentView('agenda')}
             onUpdateBlock={handleUpdateBlock}
-            onOpenAddModal={() => {
-              setEditingBlock(null);
-              setIsAddBlockOpen(true);
-            }}
+            onOpenAddModal={(pillarId) => handleOpenAddBlockModal(pillarId || activeBlock?.domain)}
             onOpenEditModal={handleOpenEditModal}
             categories={categories}
           />
@@ -635,6 +644,22 @@ export default function App() {
         {currentView === 'code' && (
           <FlutterCodeViewer onBackToAgenda={() => setCurrentView('agenda')} />
         )}
+
+        {/* Fallback de sécurité si la vue est indéfinie ou invalide */}
+        {!['agenda', 'activity', 'bento', 'code'].includes(currentView) && (
+          <AgendaTimeline
+            blocks={timeBlocks}
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+            onSelectBlock={handleSelectBlock}
+            onOpenAddModal={handleOpenAddBlockModal}
+            onOpenProjects={() => setCurrentView('bento')}
+            onSeedTemplates={handleSeedTemplates}
+            onClearBlocks={handleClearBlocks}
+            categories={categories}
+            onOpenManagePillars={() => setIsManagePillarsOpen(true)}
+          />
+        )}
       </main>
 
       {/* 7. Bottom Navigation Bar Mobile (Fixe en bas sur smartphone) */}
@@ -645,8 +670,7 @@ export default function App() {
           if (currentView === 'bento') {
             setIsAddProjectOpen(true);
           } else {
-            setEditingBlock(null);
-            setIsAddBlockOpen(true);
+            handleOpenAddBlockModal();
           }
         }}
         hasActiveBlock={!!activeBlock}
@@ -663,21 +687,24 @@ export default function App() {
         isAuthenticated={!!user}
       />
 
-      {/* 10. Modals d'ajout et d'édition de bloc de temps et de projet */}
-      <AddBlockModal
-        isOpen={isAddBlockOpen}
-        onClose={() => {
-          setIsAddBlockOpen(false);
-          setEditingBlock(null);
-        }}
-        onAddBlock={handleAddBlock}
-        onAddBlocks={handleAddBlocks}
-        initialBlock={editingBlock}
-        onUpdateBlock={handleUpdateBlock}
-        projects={projects}
-        categories={categories}
-        defaultDate={selectedDate}
-      />
+      {/* 10. Modals d'ajout et d'édition de bloc de temps et de projet protégées par ErrorBoundary */}
+      <ErrorBoundary
+        onReset={handleCloseAddBlockModal}
+        fallbackTitle="Erreur dans la modale d'ajout de bloc"
+      >
+        <AddBlockModal
+          isOpen={isAddBlockOpen}
+          onClose={handleCloseAddBlockModal}
+          onAddBlock={handleAddBlock}
+          onAddBlocks={handleAddBlocks}
+          initialBlock={editingBlock}
+          initialPillarId={selectedPillarForAdd}
+          onUpdateBlock={handleUpdateBlock}
+          projects={projects}
+          categories={categories}
+          defaultDate={selectedDate}
+        />
+      </ErrorBoundary>
 
       <AddProjectModal
         isOpen={isAddProjectOpen}

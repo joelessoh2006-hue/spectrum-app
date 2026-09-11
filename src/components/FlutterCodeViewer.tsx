@@ -16,7 +16,11 @@ import {
 } from 'lucide-react';
 import JSZip from 'jszip';
 
-export const FlutterCodeViewer: React.FC = () => {
+interface FlutterCodeViewerProps {
+  onBackToAgenda?: () => void;
+}
+
+export const FlutterCodeViewer: React.FC<FlutterCodeViewerProps> = ({ onBackToAgenda }) => {
   const [selectedFilePath, setSelectedFilePath] = useState<string>('lib/main.dart');
   const [copied, setCopied] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
