@@ -332,6 +332,23 @@ export default function App() {
     }
   };
 
+  const handleImportBlocks = async (newBlocks: TimeBlock[]) => {
+    setTimeBlocks((prev) => [...prev, ...newBlocks]);
+
+    if (user) {
+      setFirestoreStatus('syncing');
+      try {
+        for (const b of newBlocks) {
+          await saveUserTimeBlock(user.uid, b);
+        }
+        setFirestoreStatus('connected');
+      } catch (err) {
+        console.error('Erreur import calendrier Firestore:', err);
+        setFirestoreStatus('error');
+      }
+    }
+  };
+
   const handleClearBlocks = async () => {
     if (user) {
       setFirestoreStatus('syncing');
@@ -764,6 +781,7 @@ export default function App() {
             onClearBlocks={handleClearBlocks}
             categories={categories}
             onOpenManagePillars={() => setIsManagePillarsOpen(true)}
+            onImportBlocks={handleImportBlocks}
           />
         )}
 

@@ -4,6 +4,7 @@ import { DOMAINS } from '../data/mockData';
 import { MonthlyCalendarWidget } from './MonthlyCalendarWidget';
 import { CategoriesExplorationGrid } from './CategoriesExplorationGrid';
 import { MultipotentialBalanceRadar } from './MultipotentialBalanceRadar';
+import { ImportCalendarModal } from './ImportCalendarModal';
 import { getPillarIcon } from '../utils/iconMap';
 import {
   Calendar as CalendarIcon,
@@ -21,6 +22,10 @@ import {
   FastForward,
   Rewind,
   GripVertical,
+  UploadCloud,
+  Lock,
+  MapPin,
+  Zap,
 } from 'lucide-react';
 
 interface AgendaTimelineProps {
@@ -36,6 +41,7 @@ interface AgendaTimelineProps {
   onClearBlocks?: () => void;
   categories?: DomainConfig[];
   onOpenManagePillars?: () => void;
+  onImportBlocks?: (blocks: TimeBlock[]) => void;
 }
 
 const FRENCH_DAYS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -57,12 +63,35 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   onClearBlocks,
   categories,
   onOpenManagePillars,
+  onImportBlocks,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
   const [dragOverPillarId, setDragOverPillarId] = useState<string | null>(null);
   const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null);
   const [shiftFeedback, setShiftFeedback] = useState<string | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [timelineDisplayMode, setTimelineDisplayMode] = useState<'macro' | 'detailed'>(() => {
+    try {
+      return (localStorage.getItem('spectrum_timeline_mode') as 'macro' | 'detailed') || 'detailed';
+    } catch {
+      return 'detailed';
+    }
+  });
+
+  const handleToggleDisplayMode = (mode: 'macro' | 'detailed') => {
+    setTimelineDisplayMode(mode);
+    try {
+      localStorage.setItem('spectrum_timeline_mode', mode);
+    } catch {
+      // ignore
+    }
+    showNotification(
+      mode === 'macro'
+        ? 'Mode Piliers (Macro) activé : Créneaux sanctuarisés sans charge mentale'
+        : 'Mode Détaillé (Micro) activé : Titres de tâches & objectifs affichés'
+    );
+  };
 
   const showNotification = (msg: string) => {
     setShiftFeedback(msg);
@@ -328,6 +357,52 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
               </div>
             </div>
           )}
+
+          {/* Sélecteur de Mode Timeline : Macro (Piliers Sanctuarisés) vs Détaillé (Micro-tâches) */}
+          <div
+            id="agenda-mode-switcher"
+            className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl p-1 flex items-center gap-1 shadow-sm"
+          >
+            <button
+              type="button"
+              id="agenda-mode-macro-btn"
+              onClick={() => handleToggleDisplayMode('macro')}
+              className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                timelineDisplayMode === 'macro'
+                  ? 'bg-[#6C5CE7] text-white shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
+              }`}
+              title="Mode Piliers (Macro) : Affiche des blocs sanctuarisés épurés (Tech, Art...) et révèle l'objectif précis au clic"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Piliers (Macro)</span>
+            </button>
+            <button
+              type="button"
+              id="agenda-mode-detailed-btn"
+              onClick={() => handleToggleDisplayMode('detailed')}
+              className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                timelineDisplayMode === 'detailed'
+                  ? 'bg-[#6C5CE7] text-white shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
+              }`}
+              title="Mode Détaillé (Micro) : Affiche directement le titre de chaque tâche spécifique et sa progression"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Détaillé</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            id="agenda-import-calendar-btn"
+            onClick={() => setIsImportModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] border border-[var(--border-card)] text-[var(--text-primary)] hover:border-[#6C5CE7] text-xs md:text-sm font-bold shadow-sm transition-all active:scale-95 cursor-pointer"
+            title="Importer des événements d'un calendrier Xiaomi, Google ou Apple (.ics)"
+          >
+            <UploadCloud className="w-4 h-4 text-[#6C5CE7]" />
+            <span>Importer (.ics)</span>
+          </button>
 
           <button
             type="button"
@@ -604,9 +679,35 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
                             >
                               <GripVertical className="w-4 h-4" />
                             </span>
-                            <h3 className="text-base font-bold text-[var(--text-primary)] group-hover:text-[#6C5CE7] transition-colors">
-                              {block.title}
-                            </h3>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="text-base font-bold text-[var(--text-primary)] group-hover:text-[#6C5CE7] transition-colors flex items-center gap-2">
+                                {timelineDisplayMode === 'macro' && !block.isFixedConstraint ? (
+                                  <>
+                                    <span
+                                      className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                                      style={{ backgroundColor: cat.color }}
+                                    />
+                                    <span>{cat.name}</span>
+                                  </>
+                                ) : (
+                                  <span>{block.title}</span>
+                                )}
+                              </h3>
+
+                              {timelineDisplayMode === 'macro' && !block.isFixedConstraint && (
+                                <span
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider inline-flex items-center gap-1"
+                                  style={{
+                                    color: cat.color,
+                                    backgroundColor: `${cat.color}15`,
+                                    borderColor: `${cat.color}35`,
+                                  }}
+                                >
+                                  <Sparkles className="w-2.5 h-2.5" />
+                                  <span>Créneau Sanctuarisé</span>
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {/* Time summary + Quick shift buttons */}
@@ -652,15 +753,88 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
                           </div>
                         </div>
 
-                        {block.globalObjective && (
-                          <p className="text-xs text-[var(--text-secondary)] line-clamp-2 leading-relaxed pl-6">
-                            {block.globalObjective}
-                          </p>
+                        {/* Mode Macro : Indication discrète et invitation au flow sans surcharge visuelle */}
+                        {timelineDisplayMode === 'macro' && !block.isFixedConstraint ? (
+                          <div className="mt-1 pl-6 flex items-center justify-between text-xs text-[var(--text-secondary)]">
+                            <span className="italic text-[var(--text-muted)] flex items-center gap-1.5">
+                              <span>Objectif masqué (esprit libre) • Cliquez pour ouvrir la Fiche</span>
+                            </span>
+                            <span className="text-[11px] font-semibold text-[#6C5CE7] group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+                              <span>Fiche & Flow</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </span>
+                          </div>
+                        ) : (
+                          block.globalObjective && (
+                            <p className="text-xs text-[var(--text-secondary)] line-clamp-2 leading-relaxed pl-6">
+                              {block.globalObjective}
+                            </p>
+                          )
                         )}
 
-                        {/* Checklist % indicator or Zen completion indicator */}
-                        <div className="mt-3 pt-2.5 border-t border-[var(--border-card)] flex items-center justify-between gap-3">
-                          {total > 0 ? (
+                        {/* Checklist % indicator or Zen completion indicator or Fixed constraint */}
+                        <div className="mt-3 pt-2.5 border-t border-[var(--border-card)] flex flex-wrap items-center justify-between gap-2">
+                          {block.isFixedConstraint ? (
+                            <>
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--text-muted)] bg-[var(--bg-surface)] px-2.5 py-0.5 rounded-lg border border-[var(--border-card)]">
+                                  <Lock className="w-3 h-3 text-[#E17055]" />
+                                  <span>Contrainte Fixe ({block.sourceCalendar || 'Agenda externe'})</span>
+                                </span>
+                                {block.location && (
+                                  <span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-muted)]">
+                                    <MapPin className="w-3 h-3 text-[#6C5CE7]" />
+                                    <span className="truncate max-w-[160px]">{block.location}</span>
+                                  </span>
+                                )}
+                              </div>
+
+                              {onUpdateBlock && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUpdateBlock({
+                                      ...block,
+                                      isFixedConstraint: false,
+                                      globalObjective:
+                                        block.globalObjective || `Session de travail : ${block.title}`,
+                                      subtasks: [
+                                        {
+                                          id: `st-${Date.now()}`,
+                                          text: 'Objectif de la session',
+                                          completed: false,
+                                        },
+                                      ],
+                                    });
+                                    showNotification('Converti en Bloc d’Activité Spectrum actif !');
+                                  }}
+                                  className="px-2.5 py-1 rounded-xl bg-[#6C5CE7]/15 hover:bg-[#6C5CE7] text-[#6C5CE7] hover:text-white border border-[#6C5CE7]/30 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                                  title="Convertir en Bloc d'Activité Spectrum actif avec Fiche & Flow"
+                                >
+                                  <Zap className="w-3 h-3" />
+                                  <span>Convertir en Bloc Actif</span>
+                                </button>
+                              )}
+                            </>
+                          ) : timelineDisplayMode === 'macro' ? (
+                            <>
+                              <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                                <span className="text-[11px] text-[var(--text-muted)]">
+                                  {total > 0 ? `${total} étape${total > 1 ? 's' : ''} planifiée${total > 1 ? 's' : ''}` : 'Mode Immersion pure'}
+                                </span>
+                                {done > 0 && (
+                                  <span className="text-[10px] font-bold text-[#55E6C1] bg-[#55E6C1]/10 px-2 py-0.5 rounded-full border border-[#55E6C1]/30">
+                                    {done}/{total} complétée{done > 1 ? 's' : ''}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 text-[11px] font-semibold text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors">
+                                <span>Lancer la session</span>
+                                <ChevronRight className="w-3 h-3 text-[#6C5CE7]" />
+                              </div>
+                            </>
+                          ) : total > 0 ? (
                             <>
                               <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
                                 <CheckCircle2 className="w-3.5 h-3.5" style={{ color: cat.color }} />
@@ -715,6 +889,20 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           );
         })}
       </div>
+
+      {/* Modal d'importation de calendrier Xiaomi / Google (.ics) */}
+      <ImportCalendarModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        categories={activeCategories}
+        selectedDate={selectedDate}
+        onImportBlocks={(newBlocks) => {
+          if (onImportBlocks) {
+            onImportBlocks(newBlocks);
+          }
+          showNotification(`${newBlocks.length} événement(s) importé(s) dans votre Agenda !`);
+        }}
+      />
     </div>
   );
 };

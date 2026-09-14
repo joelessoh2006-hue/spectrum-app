@@ -26,6 +26,10 @@ dependencies:
   firebase_auth: ^5.3.1
   cloud_firestore: ^5.4.4
 
+  # --- Synchronisation Calendrier Natif (Android/Xiaomi/iOS) ---
+  device_calendar: ^4.3.2
+  permission_handler: ^11.3.1
+
   # --- UI & Typographie ---
   google_fonts: ^6.2.1
   flutter_animate: ^4.5.0
@@ -4078,6 +4082,596 @@ class TrophiesGalleryView extends StatelessWidget {
                 );
               },
             ),
+    );
+  }
+}
+`,
+  },
+  {
+    path: 'android/app/src/main/AndroidManifest.xml',
+    name: 'AndroidManifest.xml',
+    category: 'config',
+    description: 'Manifeste Android avec autorisations READ_CALENDAR pour lire directement le calendrier natif Xiaomi / Google sur smartphone.',
+    content: `<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.spectrum.app">
+
+    <!-- Autorisations indispensables pour la synchronisation native du calendrier Xiaomi / Android -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="Spectrum"
+        android:name="\${applicationName}"
+        android:icon="@mipmap/ic_launcher">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+</manifest>
+`,
+  },
+  {
+    path: 'lib/services/device_calendar_service.dart',
+    name: 'device_calendar_service.dart',
+    category: 'service',
+    description: 'Service natif Flutter : demande de permission READ_CALENDAR, extraction des événements Xiaomi / Google et conversion en Contrainte Fixe ou Bloc d’Activité.',
+    content: `import 'package:device_calendar/device_calendar.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart';
+import '../models/activity_model.dart';
+import '../models/domain_category.dart';
+
+/// Choix du comportement lors de l'intégration dans Spectrum :
+/// - constraint : Bloque le créneau dans la timeline (contrainte externe / rendez-vous fixe)
+/// - spectrumBlock : Transforme l'événement en bloc actif complet avec attribution de pilier et fiche de focus
+enum CalendarImportMode {
+  constraint,
+  spectrumBlock;
+
+  String get label {
+    switch (this) {
+      case CalendarImportMode.constraint:
+        return 'Contrainte Fixe (Bloque le créneau)';
+      case CalendarImportMode.spectrumBlock:
+        return 'Bloc d\\'Activité Spectrum';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case CalendarImportMode.constraint:
+        return 'Visible sur la timeline pour bloquer le créneau, sans polluer vos listes d\\'actions.';
+      case CalendarImportMode.spectrumBlock:
+        return 'Converti avec Fiche d\\'Activité, attribution d\\'un pilier, chronomètre et checklist.';
+    }
+  }
+}
+
+/// Modèle intermédiaire d'un événement extrait de l'agenda smartphone
+class DeviceCalendarItem {
+  final String id;
+  final String title;
+  final DateTime start;
+  final DateTime end;
+  final String? description;
+  final String? location;
+  final String calendarName;
+  CalendarImportMode mode;
+  DomainType selectedDomain;
+  bool isIncluded;
+
+  DeviceCalendarItem({
+    required this.id,
+    required this.title,
+    required this.start,
+    required this.end,
+    this.description,
+    this.location,
+    required this.calendarName,
+    this.mode = CalendarImportMode.constraint,
+    this.selectedDomain = DomainType.tech,
+    this.isIncluded = true,
+  });
+
+  int get durationMinutes => end.difference(start).inMinutes;
+
+  String get startTimeFormatted =>
+      '\${start.hour.toString().padLeft(2, '0')}:\${start.minute.toString().padLeft(2, '0')}';
+
+  String get endTimeFormatted =>
+      '\${end.hour.toString().padLeft(2, '0')}:\${end.minute.toString().padLeft(2, '0')}';
+
+  String get dateString =>
+      '\${start.year.toString().padLeft(4, '0')}-\${start.month.toString().padLeft(2, '0')}-\${start.day.toString().padLeft(2, '0')}';
+}
+
+/// Service de lecture de l'agenda local sur smartphone Android (Xiaomi MIUI/HyperOS, Samsung, Pixel...)
+class DeviceCalendarService {
+  final DeviceCalendarPlugin _deviceCalendarPlugin = DeviceCalendarPlugin();
+
+  /// Demande l'autorisation d'accès aux calendriers via permission_handler
+  Future<bool> requestPermission() async {
+    final status = await Permission.calendar.request();
+    if (status.isGranted) return true;
+
+    // Fallback via le plugin device_calendar
+    final permissionsGranted = await _deviceCalendarPlugin.hasPermissions();
+    if (permissionsGranted.isSuccess && (permissionsGranted.data ?? false)) {
+      return true;
+    }
+    final requestResult = await _deviceCalendarPlugin.requestPermissions();
+    return requestResult.isSuccess && (requestResult.data ?? false);
+  }
+
+  /// Récupère tous les événements du smartphone pour un jour donné
+  Future<List<DeviceCalendarItem>> fetchEventsForDay(DateTime day) async {
+    final hasPerm = await requestPermission();
+    if (!hasPerm) {
+      debugPrint('[DeviceCalendarService] Permission calendrier refusée.');
+      return [];
+    }
+
+    final calendarsResult = await _deviceCalendarPlugin.retrieveCalendars();
+    if (!calendarsResult.isSuccess || calendarsResult.data == null) {
+      return [];
+    }
+
+    final dayStart = DateTime(day.year, day.month, day.day, 0, 0, 0);
+    final dayEnd = DateTime(day.year, day.month, day.day, 23, 59, 59);
+
+    final List<DeviceCalendarItem> items = [];
+
+    for (final cal in calendarsResult.data!) {
+      if (cal.id == null) continue;
+
+      final eventsResult = await _deviceCalendarPlugin.retrieveEvents(
+        cal.id,
+        RetrieveEventsParams(startDate: dayStart, endDate: dayEnd),
+      );
+
+      if (eventsResult.isSuccess && eventsResult.data != null) {
+        for (final evt in eventsResult.data!) {
+          final start = evt.start ?? dayStart;
+          final end = evt.end ?? start.add(const Duration(hours: 1));
+          final title = evt.title ?? 'Sans titre';
+          final desc = evt.description;
+
+          // Détection automatique intelligente : RDV externe vs Bloc créatif/tech
+          final autoMode = _guessMode(title, desc);
+          final autoDomain = _guessDomain(title, desc);
+
+          items.add(
+            DeviceCalendarItem(
+              id: evt.eventId ?? 'dev-\${DateTime.now().millisecondsSinceEpoch}',
+              title: title,
+              start: start,
+              end: end,
+              description: desc,
+              location: evt.location,
+              calendarName: cal.name ?? 'Calendrier Xiaomi',
+              mode: autoMode,
+              selectedDomain: autoDomain,
+              isIncluded: true,
+            ),
+          );
+        }
+      }
+    }
+
+    items.sort((a, b) => a.start.compareTo(b.start));
+    return items;
+  }
+
+  /// Détection heuristique du mode : Contrainte fixe vs Bloc d'Activité
+  CalendarImportMode _guessMode(String title, String? desc) {
+    final text = '\$title \${desc ?? ''}'.toLowerCase();
+    final constraintKeywords = [
+      'rdv', 'docteur', 'dentiste', 'médical', 'réunion', 'meeting',
+      'call', 'sync', 'banque', 'train', 'avion', 'courses', 'admin'
+    ];
+    for (final kw in constraintKeywords) {
+      if (text.contains(kw)) return CalendarImportMode.constraint;
+    }
+    return CalendarImportMode.constraint; // Défaut sécurisé pour ne pas encombrer
+  }
+
+  /// Détection heuristique du domaine si converti en Bloc d'Activité
+  DomainType _guessDomain(String title, String? desc) {
+    final text = '\$title \${desc ?? ''}'.toLowerCase();
+    if (text.contains('code') || text.contains('dev') || text.contains('flutter') || text.contains('python') || text.contains('cyber')) {
+      return DomainType.tech;
+    }
+    if (text.contains('rap') || text.contains('musique') || text.contains('beat') || text.contains('prod') || text.contains('texte')) {
+      return DomainType.art;
+    }
+    return DomainType.curiosity;
+  }
+
+  /// Conversion de l'événement natif en TimeBlock Spectrum selon le mode choisi
+  TimeBlock convertToTimeBlock(DeviceCalendarItem item) {
+    final startMins = item.start.hour * 60 + item.start.minute;
+    final isConstraint = item.mode == CalendarImportMode.constraint;
+
+    return TimeBlock(
+      id: 'native-\${item.id}-\${DateTime.now().millisecondsSinceEpoch}',
+      title: item.title,
+      domain: isConstraint ? DomainType.curiosity : item.selectedDomain,
+      date: item.dateString,
+      startTime: item.startTimeFormatted,
+      endTime: item.endTimeFormatted,
+      startMinutes: startMins,
+      durationMinutes: item.durationMinutes > 0 ? item.durationMinutes : 60,
+      isRecurring: false,
+      recurringDays: const [],
+      globalObjective: isConstraint
+          ? (item.description ?? 'Contrainte externe importée depuis votre agenda Xiaomi.')
+          : (item.description ?? 'Session de travail issue de votre agenda : \${item.title}'),
+      checklist: isConstraint
+          ? const []
+          : [
+              const ChecklistItem(
+                id: 'st-init-1',
+                title: 'Objectif principal de la session',
+                isCompleted: false,
+              ),
+            ],
+      notes: 'Source : \${item.calendarName}\${item.location != null ? '\\nLieu : \${item.location}' : ''}',
+    );
+  }
+}
+`,
+  },
+  {
+    path: 'lib/widgets/import_calendar_dialog.dart',
+    name: 'import_calendar_dialog.dart',
+    category: 'widget',
+    description: 'Boîte de dialogue Material 3 permettant de choisir entre Contrainte Fixe et Bloc d’Activité Spectrum lors de l’importation Xiaomi.',
+    content: `import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/device_calendar_service.dart';
+import '../services/agenda_provider.dart';
+import '../models/domain_category.dart';
+import '../theme.dart';
+
+/// Dialogue Material 3 pour l'importation native depuis l'agenda Xiaomi (Méthode 3)
+class ImportCalendarDialog extends StatefulWidget {
+  final DateTime targetDate;
+
+  const ImportCalendarDialog({super.key, required this.targetDate});
+
+  @override
+  State<ImportCalendarDialog> createState() => _ImportCalendarDialogState();
+}
+
+class _ImportCalendarDialogState extends State<ImportCalendarDialog> {
+  final DeviceCalendarService _service = DeviceCalendarService();
+  bool _isLoading = true;
+  List<DeviceCalendarItem> _events = [];
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDeviceEvents();
+  }
+
+  Future<void> _loadDeviceEvents() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final items = await _service.fetchEventsForDay(widget.targetDate);
+      setState(() {
+        _events = items;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Impossible de lire le calendrier natif : \$e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _applyImport() {
+    final selectedItems = _events.where((e) => e.isIncluded).toList();
+    if (selectedItems.isEmpty) return;
+
+    final agendaProvider = Provider.of<AgendaProvider>(context, listen: false);
+    for (final item in selectedItems) {
+      final block = _service.convertToTimeBlock(item);
+      agendaProvider.addBlock(block);
+    }
+
+    Navigator.of(context).pop(selectedItems.length);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: SpectrumTheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Container(
+        width: 540,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: SpectrumTheme.domainTech.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.calendar_month, color: SpectrumTheme.domainTech),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Synchronisation Agenda Xiaomi",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: SpectrumTheme.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        "Lecture directe via permission READ_CALENDAR",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: SpectrumTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: SpectrumTheme.textMuted),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Content
+            if (_isLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40),
+                  child: CircularProgressIndicator(color: SpectrumTheme.domainTech),
+                ),
+              )
+            else if (_errorMessage != null)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.red),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (_events.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: SpectrumTheme.surfaceElevated,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Center(
+                  child: Text(
+                    "Aucun événement trouvé dans l'agenda de votre smartphone pour ce jour.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: SpectrumTheme.textSecondary, fontSize: 13),
+                  ),
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 380),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _events.length,
+                  itemBuilder: (context, index) {
+                    final evt = _events[index];
+                    final isConstraint = evt.mode == CalendarImportMode.constraint;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: evt.isIncluded
+                            ? SpectrumTheme.surfaceElevated
+                            : SpectrumTheme.surfaceElevated.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: evt.isIncluded
+                              ? SpectrumTheme.border
+                              : Colors.transparent,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: evt.isIncluded,
+                                activeColor: SpectrumTheme.domainTech,
+                                onChanged: (val) {
+                                  setState(() {
+                                    evt.isIncluded = val ?? false;
+                                  });
+                                },
+                              ),
+                              Expanded(
+                                child: Text(
+                                  evt.title,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: evt.isIncluded
+                                        ? SpectrumTheme.textPrimary
+                                        : SpectrumTheme.textMuted,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                "\${evt.startTimeFormatted} - \${evt.endTimeFormatted}",
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontFamily: 'monospace',
+                                  color: SpectrumTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          if (evt.isIncluded) ...[
+                            const SizedBox(height: 8),
+                            // Choix entre Contrainte Fixe et Bloc d'Activité
+                            Row(
+                              children: [
+                                ChoiceChip(
+                                  label: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.lock_outline, size: 14),
+                                      SizedBox(width: 4),
+                                      Text("Contrainte Fixe", style: TextStyle(fontSize: 11)),
+                                    ],
+                                  ),
+                                  selected: isConstraint,
+                                  selectedColor: SpectrumTheme.surface,
+                                  onSelected: (selected) {
+                                    if (selected) {
+                                      setState(() {
+                                        evt.mode = CalendarImportMode.constraint;
+                                      });
+                                    }
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                ChoiceChip(
+                                  label: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.bolt, size: 14),
+                                      SizedBox(width: 4),
+                                      Text("Bloc d'Activité Spectrum", style: TextStyle(fontSize: 11)),
+                                    ],
+                                  ),
+                                  selected: !isConstraint,
+                                  selectedColor: SpectrumTheme.domainTech.withOpacity(0.2),
+                                  onSelected: (selected) {
+                                    if (selected) {
+                                      setState(() {
+                                        evt.mode = CalendarImportMode.spectrumBlock;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+
+                            if (!isConstraint) ...[
+                              const SizedBox(height: 8),
+                              // Sélection du pilier
+                              Row(
+                                children: [
+                                  const Text("Pilier : ", style: TextStyle(fontSize: 12, color: SpectrumTheme.textSecondary)),
+                                  ...DomainType.values.map((d) {
+                                    final isSel = evt.selectedDomain == d;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: FilterChip(
+                                        label: Text(d.label, style: const TextStyle(fontSize: 10)),
+                                        selected: isSel,
+                                        selectedColor: d.color.withOpacity(0.2),
+                                        onSelected: (_) {
+                                          setState(() {
+                                            evt.selectedDomain = d;
+                                          });
+                                        },
+                                      ),
+                                    );
+                                  }).toList(),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+            const SizedBox(height: 20),
+
+            // Actions
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text("Annuler"),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.download, size: 16),
+                  label: const Text("Importer dans l'Agenda"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SpectrumTheme.domainTech,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: _events.any((e) => e.isIncluded) ? _applyImport : null,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

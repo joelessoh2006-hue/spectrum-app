@@ -94,7 +94,7 @@ export interface Project {
 export interface DartSourceFile {
   path: string;
   name: string;
-  category: 'core' | 'model' | 'provider' | 'screen' | 'widget' | 'config';
+  category: 'core' | 'model' | 'provider' | 'screen' | 'widget' | 'config' | 'service';
   description: string;
   content: string;
 }
