@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
+  Maximize2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -37,6 +38,7 @@ interface PomodoroFlowTimerProps {
   pillarName?: string;
   blockTitle?: string;
   onTimerComplete?: () => void;
+  onOpenFullscreenZen?: () => void;
 }
 
 export const PomodoroFlowTimer: React.FC<PomodoroFlowTimerProps> = ({
@@ -45,6 +47,7 @@ export const PomodoroFlowTimer: React.FC<PomodoroFlowTimerProps> = ({
   pillarName = 'Focus',
   blockTitle,
   onTimerComplete,
+  onOpenFullscreenZen,
 }) => {
   // Timer Mode: 'pomodoro' (25/5 alternance) vs 'continuous' (décompte unique)
   const [timerMode, setTimerMode] = useState<TimerMode>('pomodoro');
@@ -361,6 +364,18 @@ export const PomodoroFlowTimer: React.FC<PomodoroFlowTimerProps> = ({
             <Timer className="w-3.5 h-3.5" />
             <span>Continu</span>
           </button>
+
+          {onOpenFullscreenZen && (
+            <button
+              type="button"
+              onClick={onOpenFullscreenZen}
+              className="ml-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-[#6C5CE7] hover:bg-[#6C5CE7] hover:text-white transition cursor-pointer flex items-center gap-1 border border-[#6C5CE7]/30"
+              title="Passer en Mode Immersion Plein Écran (Touche F)"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Zen</span>
+            </button>
+          )}
         </div>
       </div>
 

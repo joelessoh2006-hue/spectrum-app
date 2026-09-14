@@ -4,6 +4,7 @@ import { DOMAINS } from '../data/mockData';
 import { getPillarIcon } from '../utils/iconMap';
 import { PomodoroFlowTimer } from './PomodoroFlowTimer';
 import { MarkdownNotesEditor } from './MarkdownNotesEditor';
+import { FullscreenImmersionView } from './FullscreenImmersionView';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -33,6 +34,7 @@ interface ActivitySheetProps {
   onOpenAddModal?: (pillarId?: string) => void;
   onOpenEditModal?: (block: TimeBlock) => void;
   categories?: DomainConfig[];
+  initialOpenImmersion?: boolean;
 }
 
 export const ActivitySheet: React.FC<ActivitySheetProps> = ({
@@ -42,6 +44,7 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
   onOpenAddModal,
   onOpenEditModal,
   categories,
+  initialOpenImmersion = false,
 }) => {
   if (!block) {
     return (
@@ -114,6 +117,31 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
   // Zen Mode state (auto-detected when no subtasks, with user toggle to add subtasks if desired)
   const isZenMode = totalItems === 0;
   const [showAddSubtasksInZen, setShowAddSubtasksInZen] = useState(false);
+  const [isImmersionOpen, setIsImmersionOpen] = useState(!!initialOpenImmersion);
+
+  useEffect(() => {
+    if (initialOpenImmersion) {
+      setIsImmersionOpen(true);
+    }
+  }, [initialOpenImmersion]);
+
+  // Keyboard shortcut: Press 'F' to toggle Immersion Zen Mode (when not typing in an input)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      const isInputActive =
+        activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        (activeElement as HTMLElement)?.isContentEditable;
+
+      if ((e.key === 'f' || e.key === 'F') && !isInputActive && !isImmersionOpen) {
+        e.preventDefault();
+        setIsImmersionOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isImmersionOpen]);
 
   const showSavedBadge = () => {
     setSaveStatus('Enregistré');
@@ -242,6 +270,18 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
         </button>
 
         <div className="flex items-center gap-2">
+          {/* BOUTON PLEIN ÉCRAN / ZEN */}
+          <button
+            type="button"
+            id="activity-open-zen-btn"
+            onClick={() => setIsImmersionOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#6C5CE7] to-[#A29BFE] text-white text-xs font-bold shadow-md shadow-[#6C5CE7]/25 hover:shadow-lg hover:brightness-105 active:scale-95 transition cursor-pointer"
+            title="Ouvrir le Mode Immersion Plein Écran (Touche F ou Échap pour quitter)"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+            <span>Plein Écran / Zen</span>
+          </button>
+
           {saveStatus ? (
             <span className="text-xs font-mono text-[#6C5CE7] flex items-center gap-1.5 bg-[#6C5CE7]/10 px-2.5 py-1 rounded-full border border-[#6C5CE7]/30">
               <Check className="w-3.5 h-3.5" />
@@ -305,13 +345,28 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
           )}
         </div>
 
-        {/* Indicator if in Zen Mode */}
-        {isZenMode && !showAddSubtasksInZen && (
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#55E6C1]/10 text-[#55E6C1] border border-[#55E6C1]/20 text-xs font-semibold self-start sm:self-auto">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Mode Zen • Tâche Unique</span>
-          </div>
-        )}
+        {/* Indicator & Bouton Immersion Rapide */}
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setIsImmersionOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] hover:bg-[#6C5CE7] text-[var(--text-primary)] hover:text-white border border-[var(--border-card)] hover:border-[#6C5CE7] text-xs font-bold transition-all shadow-xs cursor-pointer group"
+            title="Activer le Mode Immersion Plein Écran (Touche F)"
+          >
+            <Maximize2 className="w-3.5 h-3.5 text-[#6C5CE7] group-hover:text-white transition-colors" />
+            <span>Mode Immersion Plein Écran</span>
+            <span className="hidden md:inline px-1 py-0.2 rounded bg-black/10 dark:bg-white/10 text-[10px] font-mono opacity-70">
+              F
+            </span>
+          </button>
+
+          {isZenMode && !showAddSubtasksInZen && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#55E6C1]/10 text-[#55E6C1] border border-[#55E6C1]/20 text-xs font-semibold">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Tâche Unique</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* =========================================================================
@@ -380,6 +435,7 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
             pillarName={domainConfig.name}
             blockTitle={block.title}
             onTimerComplete={handleToggleBlockCompletion}
+            onOpenFullscreenZen={() => setIsImmersionOpen(true)}
           />
 
           {/* GROS BOUTON DE VALIDATION UNIQUE */}
@@ -473,6 +529,7 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
             pillarColor={domainConfig.color}
             pillarName={domainConfig.name}
             blockTitle={block.title}
+            onOpenFullscreenZen={() => setIsImmersionOpen(true)}
           />
 
           {/* 2. SOUS-CHECKLIST INTERACTIVE AVEC % */}
@@ -615,6 +672,40 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
         title="Zone de Notes, Terminal & Synthèse"
         placeholder="Consignez vos commandes de terminal (nmap, bash), liens web, réflexions et listes à puces en Markdown..."
       />
+
+      {/* 4. MODE IMMERSION PLEIN ÉCRAN / ZEN (Tamise tout le reste de l'écran) */}
+      {isImmersionOpen && (
+        <FullscreenImmersionView
+          block={block}
+          domainConfig={domainConfig}
+          subtasks={currentSubtasks}
+          onToggleTask={handleToggleTask}
+          onAddTask={(text) => {
+            const newItem = {
+              id: `st-${Date.now()}`,
+              text: text.trim(),
+              completed: false,
+            };
+            const updatedSubtasks = [...currentSubtasks, newItem];
+            const updatedChecklist = updatedSubtasks.map((s) => ({
+              id: s.id,
+              title: s.text,
+              isCompleted: s.completed,
+            }));
+            onUpdateBlock({
+              ...block,
+              subtasks: updatedSubtasks,
+              checklist: updatedChecklist,
+            });
+            showSavedBadge();
+          }}
+          onDeleteTask={handleDeleteTask}
+          notes={block.notes || ''}
+          onNotesChange={handleNotesChange}
+          onClose={() => setIsImmersionOpen(false)}
+          onToggleBlockCompletion={handleToggleBlockCompletion}
+        />
+      )}
     </div>
   );
 };

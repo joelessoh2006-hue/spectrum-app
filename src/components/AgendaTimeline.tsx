@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { DomainId, TimeBlock, DomainConfig } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { DomainId, TimeBlock, DomainConfig, Project } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { MonthlyCalendarWidget } from './MonthlyCalendarWidget';
 import { CategoriesExplorationGrid } from './CategoriesExplorationGrid';
 import { MultipotentialBalanceRadar } from './MultipotentialBalanceRadar';
 import { ImportCalendarModal } from './ImportCalendarModal';
+import { WaitingMilestonesDrawer, MilestoneDragData } from './WaitingMilestonesDrawer';
 import { getPillarIcon } from '../utils/iconMap';
 import {
   Calendar as CalendarIcon,
@@ -34,14 +35,23 @@ interface AgendaTimelineProps {
   onSelectDate: (date: Date) => void;
   onSelectBlock: (blockId: string) => void;
   onUpdateBlock?: (block: TimeBlock) => void;
+  onAddBlock?: (newBlock: Omit<TimeBlock, 'id'>) => void;
   onShiftDayBlocks?: (minutes: number) => void;
   onOpenAddModal: (pillarId?: string) => void;
   onOpenProjects: () => void;
   onSeedTemplates?: () => void;
   onClearBlocks?: () => void;
   categories?: DomainConfig[];
+  projects?: Project[];
   onOpenManagePillars?: () => void;
   onImportBlocks?: (blocks: TimeBlock[]) => void;
+  onOpenInstantSessionModal?: () => void;
+  onStartInstantSession?: (options?: {
+    pillarId?: string;
+    title?: string;
+    durationMinutes?: number;
+    openInZenFullscreen?: boolean;
+  }) => void;
 }
 
 const FRENCH_DAYS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -56,14 +66,18 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   onSelectDate,
   onSelectBlock,
   onUpdateBlock,
+  onAddBlock,
   onShiftDayBlocks,
   onOpenAddModal,
   onOpenProjects,
   onSeedTemplates,
   onClearBlocks,
   categories,
+  projects = [],
   onOpenManagePillars,
   onImportBlocks,
+  onOpenInstantSessionModal,
+  onStartInstantSession,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
@@ -71,6 +85,9 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null);
   const [shiftFeedback, setShiftFeedback] = useState<string | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isMilestonesDrawerOpen, setIsMilestonesDrawerOpen] = useState(false);
+  const [draggedMilestone, setDraggedMilestone] = useState<MilestoneDragData | null>(null);
+  const [dragOverHourSlot, setDragOverHourSlot] = useState<string | null>(null);
   const [timelineDisplayMode, setTimelineDisplayMode] = useState<'macro' | 'detailed'>(() => {
     try {
       return (localStorage.getItem('spectrum_timeline_mode') as 'macro' | 'detailed') || 'detailed';
@@ -260,6 +277,112 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
 
   const dayPercent = dayTotalUnits > 0 ? Math.round((dayCompletedUnits / dayTotalUnits) * 100) : 0;
 
+  const HOURS_TIMELINE = [
+    '07:00', '08:00', '09:00', '10:00', '11:00', '12:00',
+    '13:00', '14:00', '15:00', '16:00', '17:00', '18:00',
+    '19:00', '20:00', '21:00'
+  ];
+
+  const waitingMilestonesCount = useMemo(() => {
+    if (!projects || projects.length === 0) return 0;
+    let count = 0;
+    projects
+      .filter((p) => !p.archived && p.status !== 'completed')
+      .forEach((p) => {
+        count += p.milestones.filter((m) => !m.completed).length;
+      });
+    return count;
+  }, [projects]);
+
+  const handleScheduleMilestoneFromDrawer = (
+    data: MilestoneDragData,
+    slotTime?: string,
+    durationMinutes = 90
+  ) => {
+    if (!onAddBlock) return;
+
+    let start = slotTime;
+    if (!start) {
+      if (blocksForDay.length === 0) {
+        start = '09:00';
+      } else {
+        const sorted = [...blocksForDay].sort(
+          (a, b) => a.startMinutes + a.durationMinutes - (b.startMinutes + b.durationMinutes)
+        );
+        const lastBlock = sorted[sorted.length - 1];
+        const nextMins = Math.min(
+          22 * 60,
+          Math.ceil((lastBlock.startMinutes + lastBlock.durationMinutes) / 15) * 15 + 15
+        );
+        start = minutesToTimeString(nextMins);
+      }
+    }
+
+    const [startH, startM] = start.split(':').map(Number);
+    const startMins = (startH || 0) * 60 + (startM || 0);
+    const endMins = Math.min(23 * 60 + 59, startMins + durationMinutes);
+    const endTimeStr = minutesToTimeString(endMins);
+
+    const newBlock: Omit<TimeBlock, 'id'> = {
+      title: data.title,
+      domain: data.domain,
+      projectId: data.projectId,
+      date: selectedDateString,
+      startTime: start,
+      endTime: endTimeStr,
+      startMinutes: startMins,
+      durationMinutes,
+      isRecurring: false,
+      recurringDays: [],
+      globalObjective: `Accomplir le jalon : ${data.title} (${data.projectTitle})`,
+      subtasks: [
+        { id: `st-${Date.now()}-1`, text: 'Spécifier les requis et l’architecture', completed: false },
+        { id: `st-${Date.now()}-2`, text: 'Coder et implémenter le composant', completed: false },
+        { id: `st-${Date.now()}-3`, text: 'Tester et valider le rendu', completed: false },
+      ],
+      notes: `### 🎯 Jalon Bento : ${data.title}\n- Projet parent : **${data.projectTitle}**\n- Pilier : **${data.domain}**\n- Prévu le : **${selectedDateString}** de ${start} à ${endTimeStr}\n\n#### Étapes clés :\n- [ ] Analyse & préparation\n- [ ] Réalisation technique\n- [ ] Validation du jalon`,
+    };
+
+    onAddBlock(newBlock);
+    showNotification(`Jalon « ${data.title} » planifié à ${start} (${durationMinutes} min) !`);
+  };
+
+  const handleDropOnHour = (hour: string, e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverHourSlot(null);
+
+    // 1. Drop d'un jalon Bento
+    const milestoneRaw = e.dataTransfer.getData('application/spectrum-milestone');
+    if (milestoneRaw) {
+      try {
+        const milestoneData: MilestoneDragData = JSON.parse(milestoneRaw);
+        handleScheduleMilestoneFromDrawer(milestoneData, hour, 90);
+        return;
+      } catch (_) {}
+    }
+
+    // 2. Drop d'un bloc existant pour le repositionner à cette heure
+    const droppedBlockId = e.dataTransfer.getData('text/plain') || draggedBlockId;
+    if (droppedBlockId && onUpdateBlock) {
+      const sourceBlock = blocks.find((b) => b.id === droppedBlockId);
+      if (sourceBlock) {
+        const [h, m] = hour.split(':').map(Number);
+        const newStart = h * 60 + m;
+        const newEnd = Math.min(23 * 60 + 59, newStart + sourceBlock.durationMinutes);
+        onUpdateBlock({
+          ...sourceBlock,
+          date: selectedDateString,
+          startMinutes: newStart,
+          startTime: hour,
+          endTime: minutesToTimeString(newEnd),
+        });
+        showNotification(`« ${sourceBlock.title} » déplacé à ${hour}`);
+      }
+      setDraggedBlockId(null);
+    }
+  };
+
   return (
     <div className="pb-24 max-w-4xl mx-auto px-4 pt-4 text-[var(--text-primary)] font-['Plus_Jakarta_Sans',sans-serif] space-y-6">
       {/* 1. WIDGET CALENDRIER MENSUEL EN HAUT */}
@@ -404,6 +527,38 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
             <span>Importer (.ics)</span>
           </button>
 
+          {projects && projects.length > 0 && (
+            <button
+              type="button"
+              id="agenda-open-milestones-drawer-btn"
+              onClick={() => setIsMilestonesDrawerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] border border-[var(--border-card)] hover:border-[#6C5CE7] text-[var(--text-primary)] text-xs md:text-sm font-bold shadow-sm transition-all active:scale-95 cursor-pointer relative"
+              title="Ouvrir le tiroir des jalons Bento en attente à glisser-déposer sur la timeline"
+            >
+              <Layers className="w-4 h-4 text-[#6C5CE7]" />
+              <span>Jalons Bento</span>
+              {waitingMilestonesCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-extrabold bg-[#6C5CE7] text-white">
+                  {waitingMilestonesCount}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Raccourci de Démarrage Rapide : Démarrer maintenant (Spontané) */}
+          {onOpenInstantSessionModal && (
+            <button
+              type="button"
+              id="agenda-instant-session-btn"
+              onClick={onOpenInstantSessionModal}
+              className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#6C5CE7] to-[#00CEC9] text-white text-xs md:text-sm font-extrabold shadow-md shadow-[#6C5CE7]/25 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+              title={`Démarrer une session spontanée à ${currentTimeString} sans planification préalable`}
+            >
+              <Zap className="w-4 h-4 fill-white" />
+              <span>Démarrer maintenant</span>
+            </button>
+          )}
+
           <button
             type="button"
             id="agenda-add-block-btn"
@@ -415,6 +570,76 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           </button>
         </div>
       </div>
+
+      {/* BANNIÈRE DE DÉMARRAGE RAPIDE SPONTANÉ (Aujourd'hui) */}
+      {isTodaySelected && (
+        <div className="bg-gradient-to-r from-[#6C5CE7]/10 via-[#00CEC9]/10 to-[var(--bg-surface)] border border-[#6C5CE7]/25 rounded-2xl p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#6C5CE7] to-[#00CEC9] p-[2px] shadow-sm shrink-0 flex items-center justify-center">
+              <div className="w-full h-full bg-[var(--bg-surface)] rounded-[14px] flex items-center justify-center text-[#6C5CE7]">
+                <Zap className="w-4 h-4 fill-current" />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-extrabold text-[var(--text-primary)]">
+                  Session spontanée à {currentTimeString}
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#55E6C1]/15 text-[#55E6C1] border border-[#55E6C1]/30">
+                  En direct
+                </span>
+              </div>
+              <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                Envie de coder ou d'avancer tout de suite ? Créez un bloc débutant à la minute exacte.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() =>
+                onStartInstantSession?.({
+                  pillarId: 'tech',
+                  durationMinutes: 25,
+                  title: `Code & Dev (${currentTimeString})`,
+                  openInZenFullscreen: false,
+                })
+              }
+              className="px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[#6C5CE7] hover:text-white border border-[var(--border-card)] text-xs font-bold text-[var(--text-primary)] transition shadow-2xs flex items-center gap-1 cursor-pointer"
+              title="Créer et ouvrir immédiatement un bloc Tech / Dev de 25 min à la minute exacte"
+            >
+              <span>⚡ Tech (25 min)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                onStartInstantSession?.({
+                  pillarId: 'tech',
+                  durationMinutes: 50,
+                  title: `Deep Work Code (${currentTimeString})`,
+                  openInZenFullscreen: false,
+                })
+              }
+              className="px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[#6C5CE7] hover:text-white border border-[var(--border-card)] text-xs font-bold text-[var(--text-primary)] transition shadow-2xs flex items-center gap-1 cursor-pointer"
+              title="Créer et ouvrir immédiatement un bloc Deep Work de 50 min"
+            >
+              <span>🔥 Deep Work (50 min)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenInstantSessionModal}
+              className="px-3 py-1.5 rounded-xl bg-[#6C5CE7] text-white text-xs font-bold hover:bg-[#5b4bc4] transition shadow-2xs flex items-center gap-1 cursor-pointer"
+              title="Configurer la durée ou le pilier pour démarrer maintenant"
+            >
+              <span>Personnaliser…</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Notification Toast for quick shifting */}
       {shiftFeedback && (
@@ -490,6 +715,137 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
         </div>
       )}
 
+      {/* 3.5. RUBAN DES CRÉNEAUX HORAIRES & GLISSER-DÉPOSER DES JALONS */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-[#6C5CE7]/15 border border-[#6C5CE7]/30 flex items-center justify-center text-[#6C5CE7]">
+              <Clock className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Créneaux Horaires de la Journée</span>
+                <span className="text-[10px] font-normal px-2 py-0.5 rounded-md bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] border border-[var(--border-card)]">
+                  Zone de dépôt active
+                </span>
+              </h3>
+              <p className="text-[11px] text-[var(--text-secondary)]">
+                Glissez un jalon Bento directement sur une heure pour planifier 90 min en Deep Work
+              </p>
+            </div>
+          </div>
+
+          {waitingMilestonesCount > 0 && (
+            <button
+              type="button"
+              id="open-drawer-from-strip-btn"
+              onClick={() => setIsMilestonesDrawerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#6C5CE7]/10 hover:bg-[#6C5CE7] text-[#6C5CE7] hover:text-white border border-[#6C5CE7]/25 text-xs font-bold transition-all cursor-pointer"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Jalons en attente ({waitingMilestonesCount})</span>
+              <ChevronRight className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+
+        {/* Grille horizontale des créneaux horaires */}
+        <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-15 gap-2 pt-1 overflow-x-auto">
+          {HOURS_TIMELINE.map((hour) => {
+            const [h] = hour.split(':').map(Number);
+            const slotMinutes = h * 60;
+            const coveringBlock = blocksForDay.find(
+              (b) =>
+                slotMinutes >= b.startMinutes &&
+                slotMinutes < b.startMinutes + b.durationMinutes
+            );
+            const isHovered = dragOverHourSlot === hour;
+
+            if (coveringBlock) {
+              const cat = activeCategories.find((c) => c.id === coveringBlock.domain);
+              const catColor = cat?.color || '#6C5CE7';
+
+              return (
+                <button
+                  key={hour}
+                  type="button"
+                  onClick={() => onSelectBlock(coveringBlock.id)}
+                  className="p-2 rounded-xl border text-left transition flex flex-col justify-between h-20 shadow-2xs hover:shadow-xs group cursor-pointer relative overflow-hidden"
+                  style={{
+                    backgroundColor: `${catColor}10`,
+                    borderColor: `${catColor}40`,
+                  }}
+                  title={`Occupé : ${coveringBlock.title} (${coveringBlock.startTime} - ${coveringBlock.endTime})`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-[11px] font-mono font-bold text-[var(--text-primary)]">
+                      {hour}
+                    </span>
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: catColor }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-medium text-[var(--text-secondary)] line-clamp-2 leading-tight group-hover:text-[var(--text-primary)]">
+                    {coveringBlock.title}
+                  </span>
+                </button>
+              );
+            }
+
+            return (
+              <div
+                key={hour}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (dragOverHourSlot !== hour) setDragOverHourSlot(hour);
+                }}
+                onDragLeave={() => {
+                  if (dragOverHourSlot === hour) setDragOverHourSlot(null);
+                }}
+                onDrop={(e) => handleDropOnHour(hour, e)}
+                onClick={() => {
+                  if (waitingMilestonesCount > 0) {
+                    setIsMilestonesDrawerOpen(true);
+                  } else {
+                    onOpenAddModal();
+                  }
+                }}
+                className={`p-2 rounded-xl border border-dashed text-left transition-all flex flex-col justify-between h-20 cursor-pointer ${
+                  isHovered
+                    ? 'border-[#6C5CE7] bg-[#6C5CE7]/20 ring-2 ring-[#6C5CE7] scale-102 shadow-md'
+                    : 'border-[var(--border-card)] bg-[var(--bg-surface-elevated)]/60 hover:bg-[var(--bg-surface-elevated)] hover:border-[#6C5CE7]/50'
+                }`}
+                title={`Créneau libre à ${hour}. Glissez un jalon ou cliquez pour planifier.`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span
+                    className={`text-[11px] font-mono font-bold ${
+                      isHovered ? 'text-[#A29BFE]' : 'text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {hour}
+                  </span>
+                  <Plus
+                    className={`w-3 h-3 ${
+                      isHovered ? 'text-[#A29BFE]' : 'text-[var(--text-muted)]'
+                    }`}
+                  />
+                </div>
+
+                <div className="text-[10px] text-[var(--text-muted)] leading-tight">
+                  {isHovered ? (
+                    <span className="text-[#A29BFE] font-bold">Déposer ici</span>
+                  ) : (
+                    <span>Libre (90m)</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* 4. BLOCS D'ACTIVITÉS RANGÉS PAR PILIERS PERSONNALISÉS */}
       <div className="space-y-6">
         {activeCategories.map((cat) => {
@@ -510,6 +866,23 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
                 e.preventDefault();
                 setDragOverPillarId(null);
                 setDragOverBlockId(null);
+
+                // 1. Vérifier si c'est un Jalon Bento
+                const milestoneRaw = e.dataTransfer.getData('application/spectrum-milestone');
+                if (milestoneRaw) {
+                  try {
+                    const milestoneData: MilestoneDragData = JSON.parse(milestoneRaw);
+                    handleScheduleMilestoneFromDrawer(
+                      { ...milestoneData, domain: cat.id },
+                      undefined,
+                      90
+                    );
+                    setDraggedMilestone(null);
+                    return;
+                  } catch (_) {}
+                }
+
+                // 2. Sinon déplacer un bloc existant entre piliers
                 const droppedBlockId = e.dataTransfer.getData('text/plain') || draggedBlockId;
                 if (!droppedBlockId || !onUpdateBlock) return;
                 const targetBlock = blocks.find((b) => b.id === droppedBlockId);
@@ -528,6 +901,15 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
                   : 'border-[var(--border-card)]'
               }`}
             >
+              {/* Feedback visuel lors du survol d'un jalon au-dessus d'un pilier */}
+              {dragOverPillarId === cat.id && draggedMilestone && (
+                <div className="mb-3 p-2.5 rounded-2xl bg-[#6C5CE7]/20 border border-[#6C5CE7]/40 text-[#A29BFE] text-xs font-bold flex items-center justify-center gap-2 animate-pulse">
+                  <Sparkles className="w-4 h-4" />
+                  <span>
+                    Déposer ici pour créer un bloc dans « {cat.name} » : {draggedMilestone.title}
+                  </span>
+                </div>
+              )}
               {/* Category Header */}
               <div className="flex items-center justify-between pb-3 border-b border-[var(--border-card)] mb-4">
                 <div className="flex items-center gap-2.5">
@@ -902,6 +1284,42 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           }
           showNotification(`${newBlocks.length} événement(s) importé(s) dans votre Agenda !`);
         }}
+      />
+
+      {/* Bouton Flottant d'accès rapide aux Jalons Bento */}
+      {projects && projects.length > 0 && waitingMilestonesCount > 0 && !isMilestonesDrawerOpen && (
+        <aside
+          id="floating-milestones-drawer-trigger"
+          aria-label="Raccourci des jalons Bento"
+          className="fixed bottom-20 md:bottom-8 right-4 md:right-8 z-30 flex items-center"
+        >
+          <button
+            type="button"
+            onClick={() => setIsMilestonesDrawerOpen(true)}
+            className="px-3.5 py-2.5 rounded-full bg-[#6C5CE7] hover:bg-[#5b4bc4] text-white shadow-xl shadow-[#6C5CE7]/30 border border-white/20 text-xs md:text-sm font-bold flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            title="Ouvrir les Jalons Bento en attente"
+          >
+            <Layers className="w-4 h-4" />
+            <span className="hidden sm:inline">Jalons Bento</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[11px] font-mono font-extrabold bg-white text-[#6C5CE7]">
+              {waitingMilestonesCount}
+            </span>
+          </button>
+        </aside>
+      )}
+
+      {/* 5. TIROIR LATÉRAL DES JALONS BENTO EN ATTENTE */}
+      <WaitingMilestonesDrawer
+        isOpen={isMilestonesDrawerOpen}
+        onClose={() => setIsMilestonesDrawerOpen(false)}
+        projects={projects}
+        blocks={blocks}
+        categories={activeCategories}
+        selectedDate={selectedDate}
+        onScheduleMilestone={handleScheduleMilestoneFromDrawer}
+        onOpenProjects={onOpenProjects}
+        onDragStartMilestone={(data) => setDraggedMilestone(data)}
+        onDragEndMilestone={() => setDraggedMilestone(null)}
       />
     </div>
   );

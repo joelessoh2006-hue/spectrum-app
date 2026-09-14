@@ -32,6 +32,7 @@ import { FlutterCodeViewer } from './components/FlutterCodeViewer';
 import { AddBlockModal } from './components/AddBlockModal';
 import { AddProjectModal } from './components/AddProjectModal';
 import { ManagePillarsModal } from './components/ManagePillarsModal';
+import { InstantSessionModal } from './components/InstantSessionModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import {
   Calendar,
@@ -41,6 +42,7 @@ import {
   AlertCircle,
   Sparkles,
   Loader2,
+  Zap,
 } from 'lucide-react';
 
 export default function App() {
@@ -93,6 +95,8 @@ export default function App() {
   } | null>(null);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
   const [isManagePillarsOpen, setIsManagePillarsOpen] = useState(false);
+  const [isInstantSessionModalOpen, setIsInstantSessionModalOpen] = useState(false);
+  const [autoOpenImmersion, setAutoOpenImmersion] = useState(false);
 
   // 1. Écoute et restauration automatique de l'état d'authentification Firebase
   useEffect(() => {
@@ -362,6 +366,84 @@ export default function App() {
       }
     } else {
       setTimeBlocks([]);
+    }
+  };
+
+  // Démarrage rapide d'une session spontanée à la minute précise actuelle
+  const handleStartInstantSession = async (options?: {
+    pillarId?: string;
+    title?: string;
+    durationMinutes?: number;
+    openInZenFullscreen?: boolean;
+  }) => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const startHour = now.getHours();
+    const startMin = now.getMinutes();
+    const startTime = `${pad(startHour)}:${pad(startMin)}`;
+
+    const duration = options?.durationMinutes || 25;
+    const startTotalMinutes = startHour * 60 + startMin;
+    const endMinutesTotal = startTotalMinutes + duration;
+    const endHour = Math.floor((endMinutesTotal / 60) % 24);
+    const endMin = endMinutesTotal % 60;
+    const endTime = `${pad(endHour)}:${pad(endMin)}`;
+
+    const year = now.getFullYear();
+    const month = pad(now.getMonth() + 1);
+    const day = pad(now.getDate());
+    const todayStr = `${year}-${month}-${day}`;
+
+    // Select domain: provided pillarId, or first category, or 'tech'
+    const domain =
+      options?.pillarId ||
+      categories.find((c) => c.id === 'tech')?.id ||
+      categories[0]?.id ||
+      'tech';
+    const categoryObj = categories.find((c) => c.id === domain);
+    const domainName = categoryObj ? categoryObj.name : 'Tech / Dev';
+
+    const finalTitle = options?.title || `Session Spontanée : ${domainName}`;
+
+    const newBlock: TimeBlock = {
+      id: `block-instant-${Date.now()}`,
+      title: finalTitle,
+      domain,
+      startTime,
+      endTime,
+      startMinutes: startTotalMinutes,
+      durationMinutes: duration,
+      globalObjective: finalTitle,
+      completed: false,
+      date: todayStr,
+      isRecurring: false,
+      recurringDays: [],
+      subtasks: [
+        { id: `st-${Date.now()}-1`, text: 'Entrer dans le flow immédiat', completed: false },
+        { id: `st-${Date.now()}-2`, text: 'Avancer sur le point clé sans distraction', completed: false },
+      ],
+      checklist: [
+        { id: `st-${Date.now()}-1`, title: 'Entrer dans le flow immédiat', isCompleted: false },
+        { id: `st-${Date.now()}-2`, title: 'Avancer sur le point clé sans distraction', isCompleted: false },
+      ],
+      notes: `### ⚡ Session Spontanée démarrée à ${startTime}\n- **Pilier :** ${domainName}\n- **Créneau réel :** ${startTime} ➔ ${endTime} (${duration} min)\n- **Objectif immédiat :** Flow, concentration & code direct\n\n`,
+    };
+
+    setTimeBlocks((prev) => [...prev, newBlock]);
+    setSelectedBlockId(newBlock.id);
+    setSelectedDate(new Date());
+    setAutoOpenImmersion(!!options?.openInZenFullscreen);
+    setCurrentView('activity');
+
+    if (user) {
+      setFirestoreStatus('syncing');
+      try {
+        await saveUserTimeBlock(user.uid, newBlock);
+        setFirestoreStatus('connected');
+      } catch (err) {
+        console.error('Erreur sauvegarde session spontanée Firestore:', err);
+        setFirestoreStatus('error');
+      }
     }
   };
 
@@ -654,6 +736,7 @@ export default function App() {
         onLogout={handleLogout}
         onOpenOnboarding={() => setShowOnboarding(true)}
         onOpenManagePillars={() => setIsManagePillarsOpen(true)}
+        onOpenInstantSession={() => setIsInstantSessionModalOpen(true)}
         firestoreStatus={firestoreStatus}
       />
 
@@ -775,24 +858,32 @@ export default function App() {
             onSelectDate={setSelectedDate}
             onSelectBlock={handleSelectBlock}
             onUpdateBlock={handleUpdateBlock}
+            onAddBlock={handleAddBlock}
             onOpenAddModal={handleOpenAddBlockModal}
             onOpenProjects={() => setCurrentView('bento')}
             onSeedTemplates={handleSeedTemplates}
             onClearBlocks={handleClearBlocks}
             categories={categories}
+            projects={projects}
             onOpenManagePillars={() => setIsManagePillarsOpen(true)}
             onImportBlocks={handleImportBlocks}
+            onOpenInstantSessionModal={() => setIsInstantSessionModalOpen(true)}
+            onStartInstantSession={handleStartInstantSession}
           />
         )}
 
         {currentView === 'activity' && (
           <ActivitySheet
             block={activeBlock}
-            onBack={() => setCurrentView('agenda')}
+            onBack={() => {
+              setAutoOpenImmersion(false);
+              setCurrentView('agenda');
+            }}
             onUpdateBlock={handleUpdateBlock}
             onOpenAddModal={(pillarId) => handleOpenAddBlockModal(pillarId || activeBlock?.domain)}
             onOpenEditModal={handleOpenEditModal}
             categories={categories}
+            initialOpenImmersion={autoOpenImmersion}
           />
         )}
 
@@ -900,6 +991,14 @@ export default function App() {
         categories={categories}
         onSaveCategory={handleSaveCategory}
         onDeleteCategory={handleDeleteCategory}
+      />
+
+      {/* 12. Modal Démarrer Maintenant / Session Spontanée à la minute précise */}
+      <InstantSessionModal
+        isOpen={isInstantSessionModalOpen}
+        onClose={() => setIsInstantSessionModalOpen(false)}
+        categories={categories}
+        onConfirm={handleStartInstantSession}
       />
     </div>
   );

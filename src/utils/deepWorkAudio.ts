@@ -343,7 +343,7 @@ export function playDeepWorkSound(type: DeepWorkSoundType, volume: number = 0.5)
 }
 
 // Gentle sound notifications for Pomodoro transition
-export function playChime(type: 'focus_end' | 'break_end' | 'bowl_strike') {
+export function playChime(type: 'focus_end' | 'break_end' | 'bowl_strike' = 'focus_end') {
   try {
     const ctx = getAudioContext();
     const now = ctx.currentTime;

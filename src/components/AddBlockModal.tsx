@@ -15,6 +15,7 @@ import {
   ListChecks,
   Sparkles,
   Layers,
+  Zap,
 } from 'lucide-react';
 
 interface AddBlockModalProps {
@@ -272,7 +273,42 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
     return dates;
   }, [isOpen, isSpecificDate, scheduledDate, selectedDays, recurrenceHorizon, customEndDate]);
 
+  // Calcul de la durée actuelle en minutes
+  const currentDuration = useMemo(() => {
+    const [startH, startM] = (startTime || '00:00').split(':').map(Number);
+    const [endH, endM] = (endTime || '00:00').split(':').map(Number);
+    const startMins = (startH || 0) * 60 + (startM || 0);
+    const endMins = (endH || 0) * 60 + (endM || 0);
+    return endMins >= startMins ? endMins - startMins : 0;
+  }, [startTime, endTime]);
+
   if (!isOpen) return null;
+
+  const addMinutesToTime = (timeStr: string, minutesToAdd: number): string => {
+    const [h, m] = (timeStr || '14:00').split(':').map(Number);
+    const totalMinutes = Math.min(23 * 60 + 59, (h || 0) * 60 + (m || 0) + minutesToAdd);
+    const newH = Math.floor(totalMinutes / 60);
+    const newM = totalMinutes % 60;
+    return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+  };
+
+  const handleApplyPresetDuration = (durationMinutes: number) => {
+    const baseStart = startTime || '14:00';
+    const newEnd = addMinutesToTime(baseStart, durationMinutes);
+    setEndTime(newEnd);
+  };
+
+  const handleSetStartTimeNow = () => {
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const roundedMins = Math.ceil(currentMins / 5) * 5;
+    const startH = Math.floor((roundedMins % (24 * 60)) / 60);
+    const startM = roundedMins % 60;
+    const newStart = `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`;
+    setStartTime(newStart);
+    const duration = currentDuration > 0 ? currentDuration : 90;
+    setEndTime(addMinutesToTime(newStart, duration));
+  };
 
   // Subtask Handlers
   const handleAddSubtask = () => {
@@ -543,6 +579,89 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
             )}
           </div>
 
+          {/* ⚡ Préréglages Rapides de Session (1 Clic) */}
+          <div className="bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-[#55E6C1]" />
+                <span>Préréglages Rapides de Durée</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSetStartTimeNow}
+                  className="text-[10px] font-semibold text-[#6C5CE7] hover:underline flex items-center gap-1 cursor-pointer"
+                  title="Régler l'heure de début sur l'heure actuelle"
+                >
+                  <Clock className="w-3 h-3" />
+                  <span>Démarrer maintenant</span>
+                </button>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[var(--bg-surface)] border border-[var(--border-card)] text-[var(--text-secondary)]">
+                  {startTime} ➔ {endTime} ({currentDuration} min)
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                id="preset-sprint-45"
+                onClick={() => handleApplyPresetDuration(45)}
+                className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                  currentDuration === 45
+                    ? 'bg-[#55E6C1]/15 border-[#55E6C1] text-white shadow-sm ring-1 ring-[#55E6C1]/50'
+                    : 'bg-[var(--bg-surface)] border-[var(--border-card)] hover:border-[var(--border-highlight)] text-[var(--text-primary)]'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-xs font-bold flex items-center gap-1">⚡ Sprint</span>
+                  <span className="text-[11px] font-mono font-bold text-[#55E6C1]">45m</span>
+                </div>
+                <span className="text-[10px] text-[var(--text-muted)] mt-1">
+                  Bugfix, révision, micro-tâche
+                </span>
+              </button>
+
+              <button
+                type="button"
+                id="preset-deepwork-90"
+                onClick={() => handleApplyPresetDuration(90)}
+                className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                  currentDuration === 90
+                    ? 'bg-[#6C5CE7]/20 border-[#6C5CE7] text-white shadow-sm ring-1 ring-[#6C5CE7]/50'
+                    : 'bg-[var(--bg-surface)] border-[var(--border-card)] hover:border-[var(--border-highlight)] text-[var(--text-primary)]'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-xs font-bold flex items-center gap-1">🧠 Deep Work</span>
+                  <span className="text-[11px] font-mono font-bold text-[#6C5CE7]">90m</span>
+                </div>
+                <span className="text-[10px] text-[#A29BFE] mt-1 font-medium">
+                  Recommandé pour le code & stack
+                </span>
+              </button>
+
+              <button
+                type="button"
+                id="preset-immersion-120"
+                onClick={() => handleApplyPresetDuration(120)}
+                className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                  currentDuration === 120
+                    ? 'bg-[#00CEC9]/15 border-[#00CEC9] text-white shadow-sm ring-1 ring-[#00CEC9]/50'
+                    : 'bg-[var(--bg-surface)] border-[var(--border-card)] hover:border-[var(--border-highlight)] text-[var(--text-primary)]'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-xs font-bold flex items-center gap-1">🌊 Immersion</span>
+                  <span className="text-[11px] font-mono font-bold text-[#00CEC9]">2h</span>
+                </div>
+                <span className="text-[10px] text-[var(--text-muted)] mt-1">
+                  Architecture, création de A à Z
+                </span>
+              </button>
+            </div>
+          </div>
+
           {/* 3. Mode de Programmation : Jour Unique vs Récurrence */}
           <div className="bg-[var(--bg-surface-elevated)] p-4 rounded-2xl border border-[var(--border-card)] space-y-3">
             <div className="flex items-center justify-between">
@@ -680,29 +799,70 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
             )}
           </div>
 
-          {/* 4. Créneau Horaire */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5" /> Début
-              </label>
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#6C5CE7]"
-              />
+          {/* 4. Créneau Horaire & Micro-Ajustements */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" /> Début
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleSetStartTimeNow}
+                    className="text-[10px] text-[#6C5CE7] hover:underline font-semibold cursor-pointer"
+                  >
+                    Maintenant
+                  </button>
+                </div>
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#6C5CE7]"
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" /> Fin
+                  </label>
+                  <span className="text-[10px] font-mono font-bold text-[#55E6C1]">
+                    {currentDuration} min
+                  </span>
+                </div>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#6C5CE7]"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5" /> Fin
-              </label>
-              <input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#6C5CE7]"
-              />
+
+            {/* Micro-chips d'ajustement direct */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+              <span className="text-[10px] text-[var(--text-muted)] font-medium">Ajuster la fin :</span>
+              {[
+                { label: '+15m', mins: 15 },
+                { label: '+30m', mins: 30 },
+                { label: '45m', mins: 45 },
+                { label: '90m (Deep Work)', mins: 90 },
+                { label: '2h (Immersion)', mins: 120 },
+              ].map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => handleApplyPresetDuration(chip.mins)}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-semibold border transition cursor-pointer ${
+                    currentDuration === chip.mins
+                      ? 'bg-[#6C5CE7] border-[#6C5CE7] text-white shadow-xs'
+                      : 'bg-[var(--bg-surface)] border-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-highlight)]'
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
             </div>
           </div>
 

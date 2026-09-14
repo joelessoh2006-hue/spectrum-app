@@ -2,13 +2,18 @@ import React, { useState, useMemo } from 'react';
 import { DomainId, Project, DomainConfig } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { getPillarIcon } from '../utils/iconMap';
-import { X, Plus, Target, Tag, Trash2 } from 'lucide-react';
+import { X, Plus, Target, Tag, Trash2, CheckCircle2, Circle } from 'lucide-react';
 
 interface AddProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (project: Omit<Project, 'id'>) => void;
   categories?: DomainConfig[];
+}
+
+interface DraftMilestone {
+  title: string;
+  completed: boolean;
 }
 
 export const AddProjectModal: React.FC<AddProjectModalProps> = ({
@@ -36,19 +41,30 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
   const [description, setDescription] = useState('');
   const [bentoSize, setBentoSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [tagsInput, setTagsInput] = useState('');
-  const [milestonesList, setMilestonesList] = useState<string[]>([
-    'Cadrage initial du projet',
-    'Sortie du premier prototype',
+  const [milestonesList, setMilestonesList] = useState<DraftMilestone[]>([
+    { title: 'Cadrage initial du projet', completed: false },
+    { title: 'Sortie du premier prototype', completed: false },
   ]);
   const [newMilestoneText, setNewMilestoneText] = useState('');
 
+  // Live preview of progress based on checked milestones
+  const completedCount = milestonesList.filter((m) => m.completed).length;
+  const totalCount = milestonesList.length;
+  const calculatedProgress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
   if (!isOpen) return null;
 
-  const handleAddMilestoneItem = () => {
+  const handleAddMilestoneItem = (markAsCompleted = false) => {
     const trimmed = newMilestoneText.trim();
     if (!trimmed) return;
-    setMilestonesList((prev) => [...prev, trimmed]);
+    setMilestonesList((prev) => [...prev, { title: trimmed, completed: markAsCompleted }]);
     setNewMilestoneText('');
+  };
+
+  const handleToggleMilestoneCompleted = (index: number) => {
+    setMilestonesList((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, completed: !m.completed } : m))
+    );
   };
 
   const handleRemoveMilestoneItem = (index: number) => {
@@ -65,26 +81,30 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
       .filter(Boolean);
 
     // Merge any text typed in newMilestoneText if not yet clicked "+"
-    const allMilestoneTexts = [...milestonesList];
-    if (newMilestoneText.trim() && !allMilestoneTexts.includes(newMilestoneText.trim())) {
-      allMilestoneTexts.push(newMilestoneText.trim());
+    const finalMilestonesDraft = [...milestonesList];
+    if (newMilestoneText.trim() && !finalMilestonesDraft.some((m) => m.title === newMilestoneText.trim())) {
+      finalMilestonesDraft.push({ title: newMilestoneText.trim(), completed: false });
     }
 
     const milestones =
-      allMilestoneTexts.length > 0
-        ? allMilestoneTexts.map((mTitle, idx) => ({
+      finalMilestonesDraft.length > 0
+        ? finalMilestonesDraft.map((m, idx) => ({
             id: `m-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 5)}`,
-            title: mTitle,
-            completed: false,
+            title: m.title,
+            completed: m.completed,
           }))
         : [{ id: `m-${Date.now()}-1`, title: 'Cadrage initial du projet', completed: false }];
+
+    const doneItems = milestones.filter((m) => m.completed).length;
+    const progress = milestones.length > 0 ? Math.round((doneItems / milestones.length) * 100) : 0;
+    const status = progress === 100 ? 'completed' : 'in_progress';
 
     onAdd({
       title: title.trim(),
       domain,
       description: description.trim() || "Projet à long terme dans l'écosystème multipotentiel.",
-      progress: 0,
-      status: 'in_progress',
+      progress,
+      status,
       bentoSize,
       tags: tags.length ? tags : ['Multipotentiel', 'Sprint'],
       milestones,
@@ -93,7 +113,10 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
     setTitle('');
     setDescription('');
     setTagsInput('');
-    setMilestonesList(['Cadrage initial du projet', 'Sortie du premier prototype']);
+    setMilestonesList([
+      { title: 'Cadrage initial du projet', completed: false },
+      { title: 'Sortie du premier prototype', completed: false },
+    ]);
     setNewMilestoneText('');
     onClose();
   };
@@ -213,83 +236,158 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
             </div>
           </div>
 
-          {/* Milestones / Tasks List */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1">
-                <Target className="w-3.5 h-3.5 text-[#6C5CE7]" /> Étapes clés &amp; Tâches initiales ({milestonesList.length})
+          {/* Milestones / Tasks List with Checkboxes & Live Progress */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-[#6C5CE7]" />
+                <span>Étapes clés &amp; Tâches initiales</span>
+                <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                  ({completedCount}/{totalCount})
+                </span>
               </label>
-              <span className="text-[10px] text-[var(--text-muted)]">Ajoutez-en d'autres plus tard</span>
+
+              {/* Jauge et pourcentage en temps réel */}
+              <div className="flex items-center gap-2">
+                <div className="w-16 h-1.5 bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-[#6C5CE7] to-[#00CEC9] transition-all duration-300 rounded-full"
+                    style={{ width: `${calculatedProgress}%` }}
+                  />
+                </div>
+                <span
+                  className={`text-[11px] font-mono font-bold ${
+                    calculatedProgress > 0 ? 'text-[#00CEC9]' : 'text-[var(--text-muted)]'
+                  }`}
+                >
+                  {calculatedProgress}%
+                </span>
+              </div>
             </div>
+
+            <p className="text-[11px] text-[var(--text-muted)]">
+              💡 Cochez dès maintenant les tâches déjà accomplies hors agenda : elles alimenteront la progression du projet dès sa création.
+            </p>
 
             {/* Existing milestones in list */}
             {milestonesList.length > 0 && (
-              <div className="space-y-1.5 mb-2.5 max-h-36 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                 {milestonesList.map((m, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs text-[var(--text-primary)]"
+                    className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-all ${
+                      m.completed
+                        ? 'bg-[#55E6C1]/10 border-[#55E6C1]/30 text-[var(--text-primary)]'
+                        : 'bg-[var(--bg-surface-elevated)] border-[var(--border-card)] text-[var(--text-primary)]'
+                    }`}
                   >
-                    <span className="truncate flex-1">
-                      <span className="text-[var(--text-muted)] mr-1.5 font-mono">#{idx + 1}</span>
-                      {m}
-                    </span>
                     <button
                       type="button"
-                      onClick={() => handleRemoveMilestoneItem(idx)}
-                      className="text-[var(--text-muted)] hover:text-[#FF7675] p-1 rounded-lg transition"
-                      title="Supprimer cette étape"
+                      onClick={() => handleToggleMilestoneCompleted(idx)}
+                      className="flex items-center gap-2.5 flex-1 text-left cursor-pointer group"
+                      title={m.completed ? 'Marquer comme non terminée' : 'Marquer comme déjà terminée'}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      {m.completed ? (
+                        <CheckCircle2 className="w-4 h-4 text-[#00CEC9] shrink-0 fill-[#00CEC9]/20" />
+                      ) : (
+                        <Circle className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[#6C5CE7] shrink-0" />
+                      )}
+                      <span
+                        className={`text-xs truncate ${
+                          m.completed ? 'line-through text-[var(--text-muted)] font-medium' : 'font-normal'
+                        }`}
+                      >
+                        {m.title}
+                      </span>
                     </button>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {m.completed && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#00CEC9]/15 text-[#00CEC9] font-mono">
+                          Fait
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMilestoneItem(idx)}
+                        className="text-[var(--text-muted)] hover:text-[#FF7675] p-1 rounded-lg transition cursor-pointer"
+                        title="Supprimer cette étape"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
 
             {/* Input to add a new milestone */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pt-1">
               <input
                 type="text"
-                placeholder="Ex: Rédiger le cahier des charges..."
+                placeholder="Ex: Première version du code, maquettes Figma..."
                 value={newMilestoneText}
                 onChange={(e) => setNewMilestoneText(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    handleAddMilestoneItem();
+                    handleAddMilestoneItem(false);
                   }
                 }}
                 className="flex-1 bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7]"
               />
               <button
                 type="button"
-                onClick={handleAddMilestoneItem}
+                onClick={() => handleAddMilestoneItem(false)}
                 disabled={!newMilestoneText.trim()}
                 className="px-3 py-2 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs font-semibold text-[var(--text-primary)] hover:border-[#6C5CE7] hover:text-[#6C5CE7] disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 cursor-pointer shrink-0"
+                title="Ajouter à faire"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Ajouter</span>
+                <span>À faire</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAddMilestoneItem(true)}
+                disabled={!newMilestoneText.trim()}
+                className="px-3 py-2 rounded-xl bg-[#00CEC9]/15 border border-[#00CEC9]/40 text-xs font-bold text-[#00CEC9] hover:bg-[#00CEC9]/25 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 cursor-pointer shrink-0"
+                title="Ajouter comme déjà fait"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Déjà fait</span>
               </button>
             </div>
           </div>
 
           {/* Submit */}
-          <div className="flex justify-end gap-3 pt-3 border-t border-[var(--border-card)]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-2xl text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold bg-[#6C5CE7] hover:bg-[#5b4bc4] text-white shadow-md shadow-[#6C5CE7]/20 transition active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Ajouter au Bento</span>
-            </button>
+          <div className="flex items-center justify-between gap-3 pt-3 border-t border-[var(--border-card)]">
+            <div className="text-xs text-[var(--text-muted)]">
+              {calculatedProgress > 0 ? (
+                <span className="font-semibold text-[#00CEC9]">
+                  Démarrera à {calculatedProgress}% ({completedCount}/{totalCount} étapes finies)
+                </span>
+              ) : (
+                <span>Démarrera à 0%</span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-2xl text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                id="submit-add-project-btn"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold bg-[#6C5CE7] hover:bg-[#5b4bc4] text-white shadow-md shadow-[#6C5CE7]/20 transition active:scale-95 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Ajouter au Bento</span>
+              </button>
+            </div>
           </div>
         </form>
       </div>

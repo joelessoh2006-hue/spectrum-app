@@ -13,6 +13,7 @@ import {
   Sun,
   Moon,
   Layers,
+  Zap,
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { useTheme } from '../context/ThemeContext';
@@ -25,6 +26,7 @@ interface AuthHeaderProps {
   onLogout: () => void;
   onOpenOnboarding: () => void;
   onOpenManagePillars?: () => void;
+  onOpenInstantSession?: () => void;
   firestoreStatus: 'connected' | 'error' | 'syncing';
 }
 
@@ -36,6 +38,7 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
   onLogout,
   onOpenOnboarding,
   onOpenManagePillars,
+  onOpenInstantSession,
   firestoreStatus,
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -102,6 +105,19 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
               <Moon className="w-4 h-4 text-[#6C5CE7] transition-transform hover:-rotate-12" />
             )}
           </button>
+
+          {/* Démarrer Maintenant / Session Spontanée Quick Button */}
+          {onOpenInstantSession && (
+            <button
+              id="header-instant-session-btn"
+              onClick={onOpenInstantSession}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#6C5CE7] to-[#00CEC9] text-white text-xs font-bold shadow-xs shadow-[#6C5CE7]/30 hover:brightness-110 transition active:scale-95 cursor-pointer"
+              title="Démarrer une session spontanée maintenant"
+            >
+              <Zap className="w-3.5 h-3.5 fill-white" />
+              <span className="hidden xs:inline">Démarrer</span>
+            </button>
+          )}
 
           {/* Manage Pillars Quick Button */}
           {onOpenManagePillars && (
