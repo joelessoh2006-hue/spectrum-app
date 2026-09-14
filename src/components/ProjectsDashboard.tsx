@@ -16,6 +16,13 @@ import {
   Calendar,
   ListChecks,
   Settings2,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Trophy,
+  Archive,
+  RotateCcw,
+  Award,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -26,6 +33,12 @@ interface ProjectsDashboardProps {
   onOpenAddModal: () => void;
   onSelectBlock?: (blockId: string) => void;
   onToggleMilestone: (projectId: string, milestoneId: string) => void;
+  onAddMilestone?: (projectId: string, title: string) => void;
+  onDeleteMilestone?: (projectId: string, milestoneId: string) => void;
+  onScheduleMilestone?: (project: Project, milestoneTitle: string) => void;
+  onDeleteProject?: (projectId: string) => void;
+  onArchiveProject?: (projectId: string) => void;
+  onUnarchiveProject?: (projectId: string) => void;
   onSeedProjects?: () => void;
   categories?: DomainConfig[];
   onOpenManagePillars?: () => void;
@@ -38,12 +51,75 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
   onOpenAddModal,
   onSelectBlock,
   onToggleMilestone,
+  onAddMilestone,
+  onDeleteMilestone,
+  onScheduleMilestone,
+  onDeleteProject,
+  onArchiveProject,
+  onUnarchiveProject,
   onSeedProjects,
   categories,
   onOpenManagePillars,
 }) => {
   const [pillarFilter, setPillarFilter] = useState<string | 'all'>('all');
-  const [viewTab, setViewTab] = useState<'projects' | 'blocks'>('projects');
+  const [trophyFilter, setTrophyFilter] = useState<string | 'all'>('all');
+  const [viewTab, setViewTab] = useState<'projects' | 'trophies' | 'blocks'>('projects');
+  const [newMilestoneInputs, setNewMilestoneInputs] = useState<Record<string, string>>({});
+  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
+
+  // Séparation projets actifs sur le Bento vs Galerie des Trophées archivés
+  const activeProjects = projects.filter((p) => !p.archived);
+  const archivedProjects = projects.filter((p) => !!p.archived);
+
+  const handleArchiveWithCelebration = (projectId: string) => {
+    try {
+      confetti({
+        particleCount: 85,
+        spread: 80,
+        origin: { y: 0.6 },
+        colors: ['#00CEC9', '#FFD700', '#6C5CE7', '#55E6C1'],
+      });
+    } catch (_) {}
+    onArchiveProject?.(projectId);
+  };
+
+  const handleUnarchive = (projectId: string) => {
+    onUnarchiveProject?.(projectId);
+  };
+
+  const handleMilestoneInputChange = (projectId: string, text: string) => {
+    setNewMilestoneInputs((prev) => ({ ...prev, [projectId]: text }));
+  };
+
+  const handleAddMilestoneSubmit = (projectId: string, e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const text = (newMilestoneInputs[projectId] || '').trim();
+    if (!text || !onAddMilestone) return;
+
+    onAddMilestone(projectId, text);
+    setNewMilestoneInputs((prev) => ({ ...prev, [projectId]: '' }));
+  };
+
+  const handleToggleMilestoneWithConfetti = (
+    projectId: string,
+    milestoneId: string,
+    willBeComplete: boolean
+  ) => {
+    onToggleMilestone(projectId, milestoneId);
+    if (willBeComplete) {
+      const prj = projects.find((p) => p.id === projectId);
+      if (prj) {
+        const remaining = prj.milestones.filter((m) => !m.completed && m.id !== milestoneId).length;
+        if (remaining === 0) {
+          confetti({
+            particleCount: 50,
+            spread: 60,
+            origin: { y: 0.7 },
+          });
+        }
+      }
+    }
+  };
 
   const activeCategories: DomainConfig[] =
     categories && categories.length > 0
@@ -59,11 +135,21 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
           iconName: d.id === 'tech' ? 'Terminal' : d.id === 'art' ? 'Flame' : 'Compass',
         }));
 
-  // Compute multipotential distribution dynamically across all categories
-  const totalProjects = projects.length;
+  // Distribution multipotentielle des projets actifs sur le Bento
+  const totalActiveProjects = activeProjects.length;
   const countsByCategory: Record<string, number> = {};
   activeCategories.forEach((c) => {
-    countsByCategory[c.id] = projects.filter((p) => p.domain === c.id).length;
+    countsByCategory[c.id] = activeProjects.filter((p) => p.domain === c.id).length;
+  });
+
+  // Statistiques de la Galerie des Trophées
+  const totalArchivedMilestones = archivedProjects.reduce(
+    (acc, p) => acc + (p.milestones?.length || 0),
+    0
+  );
+  const countsByTrophyCategory: Record<string, number> = {};
+  activeCategories.forEach((c) => {
+    countsByTrophyCategory[c.id] = archivedProjects.filter((p) => p.domain === c.id).length;
   });
 
   const getDomainConfig = (domainId: string): { name: string; color: string; iconName?: string } => {
@@ -74,8 +160,12 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
     return { name: domainId, color: '#6C5CE7' };
   };
 
-  const filteredProjects = projects.filter((p) =>
+  const filteredProjects = activeProjects.filter((p) =>
     pillarFilter === 'all' ? true : p.domain === pillarFilter
+  );
+
+  const filteredTrophies = archivedProjects.filter((p) =>
+    trophyFilter === 'all' ? true : p.domain === trophyFilter
   );
 
   return (
@@ -85,7 +175,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={onBackToAgenda}
-            className="p-2 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all active:scale-95"
+            className="p-2 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all active:scale-95 cursor-pointer"
             title="Retour à l'Agenda"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -105,7 +195,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
           {onOpenManagePillars && (
             <button
               onClick={onOpenManagePillars}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition active:scale-95 shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition active:scale-95 shadow-sm cursor-pointer"
               title="Gérer les piliers"
             >
               <Settings2 className="w-4 h-4 text-[#6C5CE7]" />
@@ -116,7 +206,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
           <button
             id="dashboard-add-project-btn"
             onClick={onOpenAddModal}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#6C5CE7] hover:bg-[#5b4bc4] text-white text-xs md:text-sm font-bold shadow-md shadow-[#6C5CE7]/20 transition-all self-start sm:self-auto active:scale-95"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#6C5CE7] hover:bg-[#5b4bc4] text-white text-xs md:text-sm font-bold shadow-md shadow-[#6C5CE7]/20 transition-all self-start sm:self-auto active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Nouveau Projet</span>
@@ -124,12 +214,12 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
         </div>
       </div>
 
-      {/* Navigation Onglets: Bento Grid vs Blocs de Temps */}
-      <div className="flex items-center gap-2 mt-4 pb-1 border-b border-[var(--border-card)]">
+      {/* Navigation Onglets: Bento Grid vs Réalisations & Victoires vs Blocs de Temps */}
+      <div className="flex flex-wrap items-center gap-2 mt-4 pb-1 border-b border-[var(--border-card)]">
         <button
           type="button"
           onClick={() => setViewTab('projects')}
-          className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+          className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             viewTab === 'projects'
               ? 'bg-[#6C5CE7] text-white shadow-md shadow-[#6C5CE7]/20'
               : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-card)]'
@@ -137,23 +227,45 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
         >
           <Layers className="w-3.5 h-3.5" />
           <span>Projets Bento Grid</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/20 font-mono">
-            {projects.length}
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+            viewTab === 'projects' ? 'bg-black/20 text-white' : 'bg-[var(--bg-surface-elevated)]'
+          }`}>
+            {activeProjects.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setViewTab('trophies')}
+          className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            viewTab === 'trophies'
+              ? 'bg-amber-400 text-neutral-950 shadow-md shadow-amber-400/25 font-black'
+              : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-card)]'
+          }`}
+        >
+          <Trophy className={`w-3.5 h-3.5 ${viewTab === 'trophies' ? 'text-neutral-950' : 'text-amber-400'}`} />
+          <span>Réalisations &amp; Victoires</span>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
+            viewTab === 'trophies' ? 'bg-black/20 text-neutral-950' : 'bg-amber-400/15 text-amber-400'
+          }`}>
+            {archivedProjects.length}
           </span>
         </button>
 
         <button
           type="button"
           onClick={() => setViewTab('blocks')}
-          className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+          className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             viewTab === 'blocks'
               ? 'bg-[#6C5CE7] text-white shadow-md shadow-[#6C5CE7]/20'
               : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-card)]'
           }`}
         >
           <ListChecks className="w-3.5 h-3.5" />
-          <span>Blocs de Temps & Roadmap</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/20 font-mono">
+          <span>Blocs de Temps &amp; Roadmap</span>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+            viewTab === 'blocks' ? 'bg-black/20 text-white' : 'bg-[var(--bg-surface-elevated)]'
+          }`}>
             {timeBlocks.length}
           </span>
         </button>
@@ -178,7 +290,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
 
               <div className="flex items-center gap-2 font-mono text-xs bg-[var(--bg-surface-elevated)] px-3.5 py-1.5 rounded-xl border border-[var(--border-card)] shrink-0">
                 <span className="text-[var(--text-secondary)]">Projets actifs :</span>
-                <span className="text-[var(--text-primary)] font-bold">{totalProjects}</span>
+                <span className="text-[var(--text-primary)] font-bold">{totalActiveProjects}</span>
               </div>
             </div>
 
@@ -187,7 +299,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
               <div className="w-full h-3 bg-[var(--bg-surface-elevated)] rounded-full overflow-hidden flex border border-[var(--border-card)]">
                 {activeCategories.map((cat) => {
                   const count = countsByCategory[cat.id] || 0;
-                  const pct = totalProjects > 0 ? Math.round((count / totalProjects) * 100) : 0;
+                  const pct = totalActiveProjects > 0 ? Math.round((count / totalActiveProjects) * 100) : 0;
                   if (pct === 0) return null;
                   return (
                     <div
@@ -204,7 +316,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
               <div className="flex flex-wrap items-center gap-4 pt-1">
                 {activeCategories.map((cat) => {
                   const count = countsByCategory[cat.id] || 0;
-                  const pct = totalProjects > 0 ? Math.round((count / totalProjects) * 100) : 0;
+                  const pct = totalActiveProjects > 0 ? Math.round((count / totalActiveProjects) * 100) : 0;
 
                   return (
                     <div key={cat.id} className="flex items-center gap-2">
@@ -229,13 +341,13 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
           <div className="flex items-center gap-2 mt-6 overflow-x-auto pb-2 scrollbar-none">
             <button
               onClick={() => setPillarFilter('all')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer ${
                 pillarFilter === 'all'
                   ? 'bg-[#6C5CE7] text-white border-[#6C5CE7] shadow-sm'
                   : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-card)] hover:bg-[var(--bg-surface-elevated)]'
               }`}
             >
-              Tous les projets ({projects.length})
+              Tous les projets actifs ({activeProjects.length})
             </button>
 
             {activeCategories.map((cat) => {
@@ -333,9 +445,35 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                           <span>{domainCfg.name}</span>
                         </div>
 
-                        <span className="text-xs font-mono font-bold text-[var(--text-primary)] px-2 py-0.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)]">
-                          {project.progress}%
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-mono font-bold text-[var(--text-primary)] px-2 py-0.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)]">
+                            {project.progress}%
+                          </span>
+                          {onArchiveProject && (
+                            <button
+                              type="button"
+                              onClick={() => handleArchiveWithCelebration(project.id)}
+                              className="p-1 text-[var(--text-muted)] hover:text-amber-400 hover:bg-[var(--bg-surface-elevated)] rounded-lg transition cursor-pointer"
+                              title="Archiver ce projet dans Réalisations & Victoires"
+                            >
+                              <Archive className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {onDeleteProject && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm(`Supprimer le projet "${project.title}" ?`)) {
+                                  onDeleteProject(project.id);
+                                }
+                              }}
+                              className="p-1 text-[var(--text-muted)] hover:text-[#FF7675] hover:bg-[var(--bg-surface-elevated)] rounded-lg transition cursor-pointer"
+                              title="Supprimer ce projet"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {/* Title & Description */}
@@ -348,49 +486,180 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                         </p>
                       )}
 
-                      {/* Milestones checklist */}
-                      {project.milestones.length > 0 && (
-                        <div className="mt-4 pt-3 border-t border-[var(--border-card)] space-y-2">
-                          <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center justify-between">
-                            <span className="flex items-center gap-1">
-                              <Target className="w-3.5 h-3.5 text-[#6C5CE7]" />
-                              Jalons Clés
-                            </span>
-                            <span className="font-mono">
-                              {completedMilestones}/{totalMilestones}
+                      {/* Bannière de Victoire 100% & Bouton d'Archivage rapide */}
+                      {(project.progress === 100 || (totalMilestones > 0 && completedMilestones === totalMilestones)) && (
+                        <div className="mt-3.5 p-3 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm">
+                          <div className="flex items-center gap-2">
+                            <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
+                            <span className="text-xs font-bold text-amber-300">
+                              Projet accompli à 100 % ! 🎉
                             </span>
                           </div>
-
-                          <div className="space-y-1.5">
-                            {project.milestones.slice(0, 3).map((m) => (
-                              <button
-                                key={m.id}
-                                type="button"
-                                onClick={() => onToggleMilestone(project.id, m.id)}
-                                className="w-full flex items-center gap-2 text-left p-1 rounded-xl hover:bg-[var(--bg-surface-elevated)] transition-colors"
-                              >
-                                {m.completed ? (
-                                  <CheckCircle2
-                                    className="w-4 h-4 shrink-0"
-                                    style={{ color: domainCfg.color }}
-                                  />
-                                ) : (
-                                  <Circle className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-                                )}
-                                <span
-                                  className={`text-xs leading-tight line-clamp-1 ${
-                                    m.completed
-                                      ? 'line-through text-[var(--text-muted)]'
-                                      : 'text-[var(--text-primary)] font-medium'
-                                  }`}
-                                >
-                                  {m.title}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
+                          {onArchiveProject && (
+                            <button
+                              type="button"
+                              onClick={() => handleArchiveWithCelebration(project.id)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs shadow-sm transition active:scale-95 cursor-pointer whitespace-nowrap self-end sm:self-auto"
+                            >
+                              <Archive className="w-3.5 h-3.5" />
+                              <span>Archiver le projet</span>
+                            </button>
+                          )}
                         </div>
                       )}
+
+                      {/* Milestones & Tasks checklist */}
+                      <div className="mt-4 pt-3 border-t border-[var(--border-card)] space-y-2.5">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center justify-between">
+                          <span className="flex items-center gap-1">
+                            <Target className="w-3.5 h-3.5 text-[#6C5CE7]" />
+                            Jalons &amp; Tâches
+                          </span>
+                          <span
+                            className="font-mono text-xs font-semibold"
+                            style={{
+                              color:
+                                completedMilestones === totalMilestones && totalMilestones > 0
+                                  ? '#55E6C1'
+                                  : undefined,
+                            }}
+                          >
+                            {completedMilestones}/{totalMilestones}
+                          </span>
+                        </div>
+
+                        {/* List of milestones */}
+                        {project.milestones.length > 0 ? (
+                          <div className="space-y-1 max-h-48 overflow-y-auto pr-0.5">
+                            {(expandedProjects[project.id]
+                              ? project.milestones
+                              : project.milestones.slice(0, 4)
+                            ).map((m) => (
+                              <div
+                                key={m.id}
+                                className="group flex items-center justify-between gap-1.5 p-1 rounded-xl hover:bg-[var(--bg-surface-elevated)] transition-colors"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleToggleMilestoneWithConfetti(
+                                      project.id,
+                                      m.id,
+                                      !m.completed
+                                    )
+                                  }
+                                  className="flex items-center gap-2 text-left flex-1 min-w-0 cursor-pointer"
+                                >
+                                  {m.completed ? (
+                                    <CheckCircle2
+                                      className="w-4 h-4 shrink-0 transition-transform active:scale-90"
+                                      style={{ color: domainCfg.color }}
+                                    />
+                                  ) : (
+                                    <Circle className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] shrink-0 transition-transform active:scale-90" />
+                                  )}
+                                  <span
+                                    className={`text-xs leading-tight break-words ${
+                                      m.completed
+                                        ? 'line-through text-[var(--text-muted)] opacity-75'
+                                        : 'text-[var(--text-primary)] font-medium'
+                                    }`}
+                                  >
+                                    {m.title}
+                                  </span>
+                                </button>
+
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  {onScheduleMilestone && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onScheduleMilestone(project, m.title);
+                                      }}
+                                      className="p-1 text-[var(--text-muted)] hover:text-[#6C5CE7] hover:bg-[var(--bg-surface)] rounded-lg transition-colors cursor-pointer group-hover:text-[var(--text-secondary)]"
+                                      title="Planifier ce jalon dans l'Agenda (créer un bloc de temps)"
+                                    >
+                                      <Calendar className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+
+                                  {onDeleteMilestone && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDeleteMilestone(project.id, m.id);
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 p-1 text-[var(--text-muted)] hover:text-[#FF7675] hover:bg-[var(--bg-surface)] rounded-lg transition-colors cursor-pointer"
+                                      title="Supprimer cette tâche"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+
+                            {project.milestones.length > 4 && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedProjects((prev) => ({
+                                    ...prev,
+                                    [project.id]: !prev[project.id],
+                                  }))
+                                }
+                                className="text-[10px] font-semibold text-[#6C5CE7] hover:underline pt-0.5 inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                {expandedProjects[project.id] ? (
+                                  <>
+                                    <ChevronUp className="w-3 h-3" />
+                                    <span>Réduire</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="w-3 h-3" />
+                                    <span>
+                                      Voir les {project.milestones.length - 4} autres tâches
+                                    </span>
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-[var(--text-muted)] italic py-1">
+                            Aucune tâche définie pour ce projet.
+                          </p>
+                        )}
+
+                        {/* Quick Add Milestone / Task Input directly in the card */}
+                        {onAddMilestone && (
+                          <form
+                            onSubmit={(e) => handleAddMilestoneSubmit(project.id, e)}
+                            className="flex items-center gap-1.5 pt-1"
+                          >
+                            <input
+                              type="text"
+                              placeholder="+ Ajouter une tâche ou étape..."
+                              value={newMilestoneInputs[project.id] || ''}
+                              onChange={(e) =>
+                                handleMilestoneInputChange(project.id, e.target.value)
+                              }
+                              className="flex-1 bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7] transition"
+                            />
+                            <button
+                              type="submit"
+                              disabled={!(newMilestoneInputs[project.id] || '').trim()}
+                              className="p-1.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-[#6C5CE7] hover:bg-[#6C5CE7] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center justify-center cursor-pointer shrink-0"
+                              title="Ajouter au projet"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </form>
+                        )}
+                      </div>
 
                       {/* Linked Time Blocks */}
                       {(() => {
@@ -492,6 +761,262 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
             </div>
           )}
         </>
+      ) : viewTab === 'trophies' ? (
+        /* VUE 2: GALERIE DES TROPHÉES (RÉALISATIONS & VICTOIRES) */
+        <div className="mt-6 space-y-6">
+          {/* Header & Statistiques Trophées */}
+          <div className="bg-[var(--bg-surface)] border border-amber-400/30 rounded-2xl md:rounded-3xl p-5 sm:p-6 shadow-sm relative overflow-hidden">
+            {/* Subtle Gold / Amber Flare */}
+            <div className="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl pointer-events-none opacity-15 bg-amber-400" />
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-400/15 text-amber-400 border border-amber-400/30 flex items-center justify-center shrink-0 shadow-sm">
+                  <Trophy className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg sm:text-xl font-extrabold text-[var(--text-primary)]">
+                      Galerie des Trophées &amp; Victoires
+                    </h2>
+                    <span className="px-2 py-0.5 rounded-lg bg-amber-400/20 text-amber-300 font-bold font-mono text-[11px] border border-amber-400/30">
+                      100% Archivés
+                    </span>
+                  </div>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-xl leading-relaxed">
+                    L'écrin de tous vos accomplissements. Quand un projet atteint 100%, l'archiver libère votre Bento tout en gardant l'historique valorisant et la trace indélébile de votre persévérance.
+                  </p>
+                </div>
+              </div>
+
+              {/* 3 mini-stat pill counters */}
+              <div className="grid grid-cols-3 gap-2 shrink-0">
+                <div className="p-2.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-center">
+                  <div className="text-base sm:text-lg font-black font-mono text-amber-400">
+                    {archivedProjects.length}
+                  </div>
+                  <div className="text-[10px] text-[var(--text-secondary)] font-medium">
+                    Trophées
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-center">
+                  <div className="text-base sm:text-lg font-black font-mono text-[#55E6C1]">
+                    {totalArchivedMilestones}
+                  </div>
+                  <div className="text-[10px] text-[var(--text-secondary)] font-medium">
+                    Jalons validés
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-center">
+                  <div className="text-base sm:text-lg font-black font-mono text-[#6C5CE7]">
+                    {Object.values(countsByTrophyCategory).filter((c) => c > 0).length}
+                  </div>
+                  <div className="text-[10px] text-[var(--text-secondary)] font-medium">
+                    Sphères
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Pills for Trophies */}
+          {archivedProjects.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setTrophyFilter('all')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer ${
+                  trophyFilter === 'all'
+                    ? 'bg-amber-400 text-neutral-950 font-bold border-amber-400 shadow-sm'
+                    : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-card)] hover:bg-[var(--bg-surface-elevated)]'
+                }`}
+              >
+                Toutes les victoires ({archivedProjects.length})
+              </button>
+
+              {activeCategories.map((cat) => {
+                const count = countsByTrophyCategory[cat.id] || 0;
+                if (count === 0) return null;
+                const isSelected = trophyFilter === cat.id;
+
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setTrophyFilter(cat.id)}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer ${
+                      isSelected
+                        ? 'shadow-sm'
+                        : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-card)] hover:bg-[var(--bg-surface-elevated)]'
+                    }`}
+                    style={{
+                      backgroundColor: isSelected ? `${cat.color}20` : undefined,
+                      borderColor: isSelected ? cat.color : undefined,
+                      color: isSelected ? cat.color : undefined,
+                    }}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: cat.color }}
+                    />
+                    <span>
+                      {cat.name} ({count})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Trophies Grid */}
+          {filteredTrophies.length === 0 ? (
+            <div className="p-10 rounded-3xl bg-[var(--bg-surface)] border border-dashed border-amber-400/30 text-center flex flex-col items-center justify-center shadow-sm">
+              <div className="w-14 h-14 rounded-2xl bg-amber-400/10 text-amber-400 flex items-center justify-center mb-3 border border-amber-400/20">
+                <Trophy className="w-7 h-7" />
+              </div>
+              <h3 className="text-base font-bold text-[var(--text-primary)]">
+                {archivedProjects.length === 0
+                  ? 'Aucun projet archivé pour le moment'
+                  : 'Aucune victoire dans ce filtre'}
+              </h3>
+              <p className="text-xs text-[var(--text-secondary)] max-w-md mt-1.5 leading-relaxed">
+                {archivedProjects.length === 0
+                  ? 'Quand un de vos projets atteint 100 %, cliquez sur « Archiver le projet » sur sa carte Bento. Il viendra enrichir votre galerie de réussites sans encombrer votre espace de travail actif.'
+                  : 'Sélectionnez "Toutes les victoires" pour voir les autres trophées.'}
+              </p>
+              {archivedProjects.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setViewTab('projects')}
+                  className="mt-5 px-4 py-2 rounded-xl bg-[#6C5CE7] hover:bg-[#5b4bc4] text-white text-xs font-bold shadow-md shadow-[#6C5CE7]/20 transition active:scale-95 cursor-pointer"
+                >
+                  Voir les projets en cours
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredTrophies.map((project) => {
+                const domainCfg = getDomainConfig(project.domain);
+                const Icon = getPillarIcon(domainCfg.iconName);
+                const totalM = project.milestones?.length || 0;
+
+                return (
+                  <div
+                    key={project.id}
+                    className="bg-[var(--bg-surface)] border border-amber-400/30 hover:border-amber-400/60 rounded-2xl md:rounded-3xl p-5 shadow-sm flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md relative overflow-hidden"
+                  >
+                    {/* Golden Trophy Glow Flare */}
+                    <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl pointer-events-none opacity-20 bg-amber-400" />
+
+                    <div>
+                      {/* Ribbon: Completion badge & Pillar */}
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold uppercase tracking-wider border"
+                          style={{
+                            backgroundColor: `${domainCfg.color}15`,
+                            borderColor: `${domainCfg.color}35`,
+                            color: domainCfg.color,
+                          }}
+                        >
+                          <Icon className="w-3.5 h-3.5" />
+                          <span>{domainCfg.name}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-amber-300 px-2.5 py-0.5 rounded-xl bg-amber-400/15 border border-amber-400/30">
+                            <Trophy className="w-3 h-3 text-amber-400" />
+                            100%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Title & Description */}
+                      <h3 className="text-base sm:text-lg font-bold text-[var(--text-primary)] leading-snug">
+                        {project.title}
+                      </h3>
+                      {project.description && (
+                        <p className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed line-clamp-3">
+                          {project.description}
+                        </p>
+                      )}
+
+                      {/* Date d'accomplissement */}
+                      {(project.completionDate || project.archivedAt) && (
+                        <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-[11px] text-[var(--text-secondary)]">
+                          <Award className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>
+                            Terminé {project.completionDate ? `le ${project.completionDate}` : ''}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Accomplished Milestones checklist */}
+                      {project.milestones && project.milestones.length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-[var(--border-card)] space-y-2">
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center justify-between">
+                            <span className="flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-[#55E6C1]" />
+                              Jalons accomplis
+                            </span>
+                            <span className="font-mono text-xs text-[#55E6C1] font-bold">
+                              {totalM}/{totalM}
+                            </span>
+                          </div>
+
+                          <div className="space-y-1 max-h-40 overflow-y-auto pr-0.5">
+                            {project.milestones.map((m) => (
+                              <div
+                                key={m.id}
+                                className="flex items-center gap-2 p-1 text-xs text-[var(--text-primary)]"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 text-[#55E6C1] shrink-0" />
+                                <span className="line-through opacity-80 break-words leading-tight">
+                                  {m.title}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer Actions: Restore / Delete */}
+                    <div className="mt-5 pt-3 border-t border-[var(--border-card)] flex items-center justify-between gap-2">
+                      {onUnarchiveProject && (
+                        <button
+                          type="button"
+                          onClick={() => handleUnarchive(project.id)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--bg-surface)] border border-[var(--border-card)] hover:border-[#6C5CE7] text-[var(--text-primary)] hover:text-[#6C5CE7] text-xs font-semibold transition active:scale-95 cursor-pointer"
+                          title="Restaurer le projet sur le Bento actif"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-[#6C5CE7]" />
+                          <span>Restaurer sur le Bento</span>
+                        </button>
+                      )}
+
+                      {onDeleteProject && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Supprimer définitivement le trophée "${project.title}" ?`)) {
+                              onDeleteProject(project.id);
+                            }
+                          }}
+                          className="p-1.5 text-[var(--text-muted)] hover:text-[#FF7675] hover:bg-[var(--bg-surface-elevated)] rounded-xl transition cursor-pointer ml-auto"
+                          title="Supprimer définitivement"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       ) : (
         /* VUE 2: FEUILLE DE ROUTE DES BLOCS DE TEMPS AVEC BARRE DE PROGRESSION DES SOUS-TÂCHES */
         <div className="mt-6 space-y-4">

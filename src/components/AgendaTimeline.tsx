@@ -3,6 +3,7 @@ import { DomainId, TimeBlock, DomainConfig } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { MonthlyCalendarWidget } from './MonthlyCalendarWidget';
 import { CategoriesExplorationGrid } from './CategoriesExplorationGrid';
+import { MultipotentialBalanceRadar } from './MultipotentialBalanceRadar';
 import { getPillarIcon } from '../utils/iconMap';
 import {
   Calendar as CalendarIcon,
@@ -16,6 +17,10 @@ import {
   RotateCcw,
   Settings2,
   Layers,
+  Check,
+  FastForward,
+  Rewind,
+  GripVertical,
 } from 'lucide-react';
 
 interface AgendaTimelineProps {
@@ -23,6 +28,8 @@ interface AgendaTimelineProps {
   selectedDate: Date;
   onSelectDate: (date: Date) => void;
   onSelectBlock: (blockId: string) => void;
+  onUpdateBlock?: (block: TimeBlock) => void;
+  onShiftDayBlocks?: (minutes: number) => void;
   onOpenAddModal: (pillarId?: string) => void;
   onOpenProjects: () => void;
   onSeedTemplates?: () => void;
@@ -42,6 +49,8 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   selectedDate,
   onSelectDate,
   onSelectBlock,
+  onUpdateBlock,
+  onShiftDayBlocks,
   onOpenAddModal,
   onOpenProjects,
   onSeedTemplates,
@@ -50,6 +59,66 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   onOpenManagePillars,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
+  const [dragOverPillarId, setDragOverPillarId] = useState<string | null>(null);
+  const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null);
+  const [shiftFeedback, setShiftFeedback] = useState<string | null>(null);
+
+  const showNotification = (msg: string) => {
+    setShiftFeedback(msg);
+    setTimeout(() => {
+      setShiftFeedback(null);
+    }, 2400);
+  };
+
+  // Convert minutes from midnight to "HH:MM"
+  const minutesToTimeString = (mins: number): string => {
+    const clamped = Math.max(0, Math.min(23 * 60 + 59, mins));
+    const h = Math.floor(clamped / 60);
+    const m = clamped % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  // Shift an individual block by +/- delta minutes
+  const handleShiftBlock = (block: TimeBlock, deltaMinutes: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!onUpdateBlock) return;
+
+    const newStartMinutes = Math.max(0, Math.min(24 * 60 - block.durationMinutes, block.startMinutes + deltaMinutes));
+    const newEndMinutes = newStartMinutes + block.durationMinutes;
+
+    const updated: TimeBlock = {
+      ...block,
+      startMinutes: newStartMinutes,
+      startTime: minutesToTimeString(newStartMinutes),
+      endTime: minutesToTimeString(newEndMinutes),
+    };
+
+    onUpdateBlock(updated);
+    showNotification(`« ${block.title} » décalé de ${deltaMinutes > 0 ? `+${deltaMinutes}` : deltaMinutes} min (${updated.startTime})`);
+  };
+
+  // Shift entire day's blocks by delta minutes
+  const handleShiftAllBlocks = (deltaMinutes: number) => {
+    if (onShiftDayBlocks) {
+      onShiftDayBlocks(deltaMinutes);
+      showNotification(`Tous les blocs du jour décalés de ${deltaMinutes > 0 ? `+${deltaMinutes}` : deltaMinutes} min`);
+      return;
+    }
+
+    if (!onUpdateBlock) return;
+    blocksForDay.forEach((block) => {
+      const newStartMinutes = Math.max(0, Math.min(24 * 60 - block.durationMinutes, block.startMinutes + deltaMinutes));
+      const newEndMinutes = newStartMinutes + block.durationMinutes;
+      onUpdateBlock({
+        ...block,
+        startMinutes: newStartMinutes,
+        startTime: minutesToTimeString(newStartMinutes),
+        endTime: minutesToTimeString(newEndMinutes),
+      });
+    });
+    showNotification(`Tous les blocs du jour décalés de ${deltaMinutes > 0 ? `+${deltaMinutes}` : deltaMinutes} min`);
+  };
 
   // Update clock every 30 seconds
   useEffect(() => {
@@ -147,15 +216,20 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   };
 
   // Daily statistics
-  const dayTotalTasks = blocksForDay.reduce(
-    (acc, b) => acc + getBlockSubtasks(b).length,
-    0
-  );
-  const dayCompletedTasks = blocksForDay.reduce(
-    (acc, b) => acc + getBlockSubtasks(b).filter((i) => i.completed).length,
-    0
-  );
-  const dayPercent = dayTotalTasks > 0 ? Math.round((dayCompletedTasks / dayTotalTasks) * 100) : 0;
+  const dayTotalUnits = blocksForDay.reduce((acc, b) => {
+    const subtasks = getBlockSubtasks(b);
+    return acc + (subtasks.length > 0 ? subtasks.length : 1);
+  }, 0);
+
+  const dayCompletedUnits = blocksForDay.reduce((acc, b) => {
+    const subtasks = getBlockSubtasks(b);
+    if (subtasks.length > 0) {
+      return acc + subtasks.filter((i) => i.completed).length;
+    }
+    return acc + (b.completed ? 1 : 0);
+  }, 0);
+
+  const dayPercent = dayTotalUnits > 0 ? Math.round((dayCompletedUnits / dayTotalUnits) * 100) : 0;
 
   return (
     <div className="pb-24 max-w-4xl mx-auto px-4 pt-4 text-[var(--text-primary)] font-['Plus_Jakarta_Sans',sans-serif] space-y-6">
@@ -167,7 +241,14 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
         categories={activeCategories}
       />
 
-      {/* 2. EXPLORATION DES PILIERS (LUMA STYLE) */}
+      {/* 2. LE RADAR D'ÉQUILIBRE MULTIPOTENTIEL (Analytics & Répartition du temps) */}
+      <MultipotentialBalanceRadar
+        blocks={blocks}
+        categories={activeCategories}
+        selectedDate={selectedDate}
+      />
+
+      {/* 3. EXPLORATION DES PILIERS (LUMA STYLE) */}
       {onOpenManagePillars && (
         <CategoriesExplorationGrid
           categories={activeCategories}
@@ -178,7 +259,7 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
         />
       )}
 
-      {/* 3. EN-TÊTE DU JOUR SÉLECTIONNÉ */}
+      {/* 4. EN-TÊTE DU JOUR SÉLECTIONNÉ */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[var(--border-card)]">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)]">
@@ -197,6 +278,41 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
 
         {/* Action buttons & Stats */}
         <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Quick day-wide shift controls: décaler toute la journée */}
+          {blocksForDay.length > 0 && onUpdateBlock && (
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl p-1.5 flex items-center gap-1 shadow-sm">
+              <span className="text-[10px] font-bold uppercase text-[var(--text-muted)] px-2 hidden sm:inline">
+                Décalage jour :
+              </span>
+              <button
+                type="button"
+                onClick={() => handleShiftAllBlocks(-30)}
+                className="px-2 py-1 rounded-xl text-xs font-mono font-semibold bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition flex items-center gap-0.5 cursor-pointer"
+                title="Avancer tous les blocs de 30 minutes"
+              >
+                <Rewind className="w-3 h-3" />
+                <span>-30m</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleShiftAllBlocks(15)}
+                className="px-2 py-1 rounded-xl text-xs font-mono font-semibold bg-[var(--bg-surface-elevated)] hover:bg-[#6C5CE7]/20 hover:text-[#6C5CE7] text-[var(--text-secondary)] transition flex items-center gap-0.5 cursor-pointer"
+                title="Décaler tous les blocs de +15 minutes"
+              >
+                <span>+15m</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleShiftAllBlocks(30)}
+                className="px-2.5 py-1 rounded-xl text-xs font-mono font-bold bg-[#6C5CE7]/15 text-[#6C5CE7] hover:bg-[#6C5CE7] hover:text-white transition flex items-center gap-1 cursor-pointer border border-[#6C5CE7]/30"
+                title="Décaler tout le planning de +30 minutes (en cas d'imprévu)"
+              >
+                <FastForward className="w-3 h-3" />
+                <span>+30m</span>
+              </button>
+            </div>
+          )}
+
           {blocksForDay.length > 0 && (
             <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl px-4 py-2 flex items-center gap-3 shadow-sm">
               <div className="text-right">
@@ -204,7 +320,7 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
                   Avancement du jour
                 </div>
                 <div className="text-sm font-extrabold font-mono text-[#6C5CE7]">
-                  {dayCompletedTasks}/{dayTotalTasks} ({dayPercent}%)
+                  {dayCompletedUnits}/{dayTotalUnits} ({dayPercent}%)
                 </div>
               </div>
               <div className="w-8 h-8 rounded-full bg-[#6C5CE7]/10 border border-[#6C5CE7]/30 flex items-center justify-center text-[#6C5CE7]">
@@ -224,6 +340,14 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Notification Toast for quick shifting */}
+      {shiftFeedback && (
+        <div className="fixed top-6 right-6 z-50 bg-[#2D3436] text-white px-4 py-2.5 rounded-2xl shadow-xl border border-white/10 text-xs font-semibold flex items-center gap-2 animate-bounce">
+          <FastForward className="w-4 h-4 text-[#55E6C1]" />
+          <span>{shiftFeedback}</span>
+        </div>
+      )}
 
       {/* Info strip: live time & Firestore status */}
       <div className="p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-card)] flex items-center justify-between gap-3 text-xs">
@@ -300,7 +424,34 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           return (
             <section
               key={cat.id}
-              className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-4 sm:p-5 shadow-sm relative overflow-hidden transition-colors"
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (dragOverPillarId !== cat.id) setDragOverPillarId(cat.id);
+              }}
+              onDragLeave={() => {
+                if (dragOverPillarId === cat.id) setDragOverPillarId(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOverPillarId(null);
+                setDragOverBlockId(null);
+                const droppedBlockId = e.dataTransfer.getData('text/plain') || draggedBlockId;
+                if (!droppedBlockId || !onUpdateBlock) return;
+                const targetBlock = blocks.find((b) => b.id === droppedBlockId);
+                if (targetBlock && targetBlock.domain !== cat.id) {
+                  onUpdateBlock({
+                    ...targetBlock,
+                    domain: cat.id as DomainId,
+                  });
+                  showNotification(`Bloc transféré vers le pilier « ${cat.name} »`);
+                }
+                setDraggedBlockId(null);
+              }}
+              className={`bg-[var(--bg-surface)] border rounded-2xl md:rounded-3xl p-4 sm:p-5 shadow-sm relative overflow-hidden transition-all ${
+                dragOverPillarId === cat.id
+                  ? 'border-[#6C5CE7] ring-2 ring-[#6C5CE7]/30 bg-[#6C5CE7]/5'
+                  : 'border-[var(--border-card)]'
+              }`}
             >
               {/* Category Header */}
               <div className="flex items-center justify-between pb-3 border-b border-[var(--border-card)] mb-4">
@@ -374,12 +525,64 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
                       currentMinutesFromMidnight >= block.startMinutes &&
                       currentMinutesFromMidnight <= block.startMinutes + block.durationMinutes;
 
+                    const isBeingDragged = draggedBlockId === block.id;
+
                     return (
                       <div
                         key={block.id}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedBlockId(block.id);
+                          e.dataTransfer.setData('text/plain', block.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                        }}
+                        onDragEnd={() => {
+                          setDraggedBlockId(null);
+                          setDragOverPillarId(null);
+                          setDragOverBlockId(null);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (draggedBlockId && draggedBlockId !== block.id) {
+                            setDragOverBlockId(block.id);
+                          }
+                        }}
+                        onDragLeave={() => {
+                          if (dragOverBlockId === block.id) {
+                            setDragOverBlockId(null);
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const sourceId = e.dataTransfer.getData('text/plain') || draggedBlockId;
+                          setDragOverBlockId(null);
+                          setDragOverPillarId(null);
+                          setDraggedBlockId(null);
+
+                          if (!sourceId || sourceId === block.id || !onUpdateBlock) return;
+                          const sourceBlock = blocks.find((b) => b.id === sourceId);
+                          if (!sourceBlock) return;
+
+                          const targetStart = block.startMinutes;
+                          const targetDomain = cat.id as DomainId;
+
+                          onUpdateBlock({
+                            ...sourceBlock,
+                            domain: targetDomain,
+                            startMinutes: targetStart,
+                            startTime: block.startTime,
+                            endTime: minutesToTimeString(targetStart + sourceBlock.durationMinutes),
+                          });
+                          showNotification(`« ${sourceBlock.title} » repositionné à ${block.startTime}`);
+                        }}
                         onClick={() => onSelectBlock(block.id)}
-                        className={`cursor-pointer bg-[var(--bg-surface-elevated)] border rounded-2xl p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md relative overflow-hidden ${
-                          isLiveNow
+                        className={`group cursor-pointer bg-[var(--bg-surface-elevated)] border rounded-2xl p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md relative overflow-hidden ${
+                          isBeingDragged
+                            ? 'opacity-40 border-dashed border-[#6C5CE7]'
+                            : dragOverBlockId === block.id
+                            ? 'border-[#6C5CE7] ring-2 ring-[#6C5CE7]/30 scale-[1.01]'
+                            : isLiveNow
                             ? 'border-[#FF7675] ring-2 ring-[#FF7675]/30'
                             : 'border-[var(--border-card)] hover:border-[var(--border-highlight)]'
                         }`}
@@ -393,44 +596,115 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
                         )}
 
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
-                          <h3 className="text-base font-bold text-[var(--text-primary)] group-hover:text-[#6C5CE7] transition-colors">
-                            {block.title}
-                          </h3>
-                          <span className="text-xs font-mono font-semibold text-[var(--text-secondary)] shrink-0 flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                            {block.startTime} — {block.endTime} ({block.durationMinutes}m)
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+                              title="Glisser-déposer pour réordonner ou changer de pilier"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <GripVertical className="w-4 h-4" />
+                            </span>
+                            <h3 className="text-base font-bold text-[var(--text-primary)] group-hover:text-[#6C5CE7] transition-colors">
+                              {block.title}
+                            </h3>
+                          </div>
+
+                          {/* Time summary + Quick shift buttons */}
+                          <div
+                            className="flex items-center gap-1.5 shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span className="text-xs font-mono font-semibold text-[var(--text-secondary)] flex items-center gap-1 mr-1">
+                              <Clock className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                              {block.startTime} — {block.endTime} ({block.durationMinutes}m)
+                            </span>
+
+                            {/* Quick individual shift controls */}
+                            {onUpdateBlock && (
+                              <div className="flex items-center gap-1 bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-xl p-0.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleShiftBlock(block, -15, e)}
+                                  className="px-1.5 py-0.5 rounded-lg text-[10px] font-mono font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition"
+                                  title="Avancer de 15 minutes (-15m)"
+                                >
+                                  -15
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleShiftBlock(block, 15, e)}
+                                  className="px-1.5 py-0.5 rounded-lg text-[10px] font-mono font-semibold text-[var(--text-secondary)] hover:text-[#6C5CE7] hover:bg-[#6C5CE7]/10 transition"
+                                  title="Décaler de 15 minutes (+15m)"
+                                >
+                                  +15
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleShiftBlock(block, 30, e)}
+                                  className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-[#6C5CE7]/15 text-[#6C5CE7] hover:bg-[#6C5CE7] hover:text-white transition flex items-center gap-0.5"
+                                  title="Décaler de 30 minutes (+30m)"
+                                >
+                                  <FastForward className="w-2.5 h-2.5" />
+                                  <span>+30m</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         {block.globalObjective && (
-                          <p className="text-xs text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
+                          <p className="text-xs text-[var(--text-secondary)] line-clamp-2 leading-relaxed pl-6">
                             {block.globalObjective}
                           </p>
                         )}
 
-                        {/* Checklist % indicator */}
+                        {/* Checklist % indicator or Zen completion indicator */}
                         <div className="mt-3 pt-2.5 border-t border-[var(--border-card)] flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                            <CheckCircle2 className="w-3.5 h-3.5" style={{ color: cat.color }} />
-                            <span>
-                              {done}/{total} étape{total > 1 ? 's' : ''}
-                            </span>
-                          </div>
+                          {total > 0 ? (
+                            <>
+                              <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                                <CheckCircle2 className="w-3.5 h-3.5" style={{ color: cat.color }} />
+                                <span>
+                                  {done}/{total} étape{total > 1 ? 's' : ''}
+                                </span>
+                              </div>
 
-                          <div className="flex items-center gap-2 flex-1 max-w-[180px]">
-                            <div className="w-full h-1.5 bg-[var(--border-card)] rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full transition-all duration-300"
-                                style={{
-                                  width: `${pct}%`,
-                                  backgroundColor: cat.color,
-                                }}
-                              />
-                            </div>
-                            <span className="text-[11px] font-mono font-bold text-[var(--text-secondary)]">
-                              {pct}%
-                            </span>
-                          </div>
+                              <div className="flex items-center gap-2 flex-1 max-w-[180px]">
+                                <div className="w-full h-1.5 bg-[var(--border-card)] rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all duration-300"
+                                    style={{
+                                      width: `${pct}%`,
+                                      backgroundColor: cat.color,
+                                    }}
+                                  />
+                                </div>
+                                <span className="text-[11px] font-mono font-bold text-[var(--text-secondary)]">
+                                  {pct}%
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                                <Sparkles className="w-3.5 h-3.5" style={{ color: cat.color }} />
+                                <span className="font-medium text-[11px]">Mode Focus Immersion</span>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                {block.completed ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#55E6C1] bg-[#55E6C1]/10 px-2 py-0.5 rounded-full border border-[#55E6C1]/30">
+                                    <Check className="w-3 h-3 stroke-[3]" />
+                                    Accompli
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--text-muted)] bg-[var(--bg-surface)] px-2 py-0.5 rounded-full border border-[var(--border-card)]">
+                                    Prêt à lancer
+                                  </span>
+                                )}
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     );

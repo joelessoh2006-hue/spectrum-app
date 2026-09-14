@@ -46,6 +46,27 @@ export interface TimeBlock {
   notes: string;
   projectId?: string;
   isFocusSessionActive?: boolean;
+  completed?: boolean;
+  isFixedConstraint?: boolean; // Vrai si événement importé (contrainte fixe/agenda externe)
+  sourceCalendar?: string;     // Ex: "Calendrier Xiaomi", "Google Calendar", "Fichier .ics"
+  location?: string;
+}
+
+export interface ImportedCalendarEvent {
+  id: string;
+  title: string;
+  startDate: Date;
+  endDate: Date;
+  dateStr: string; // "YYYY-MM-DD"
+  startTime: string; // "HH:MM"
+  endTime: string;   // "HH:MM"
+  durationMinutes: number;
+  description?: string;
+  location?: string;
+  source?: string;
+  importAs: 'constraint' | 'spectrum_block';
+  selectedPillarId: string;
+  included: boolean;
 }
 
 export interface ProjectMilestone {
@@ -60,11 +81,14 @@ export interface Project {
   domain: DomainId;
   description: string;
   progress: number; // 0 to 100
-  status: 'in_progress' | 'ideation' | 'paused' | 'completed';
+  status: 'in_progress' | 'ideation' | 'paused' | 'completed' | 'archived';
   bentoSize: 'small' | 'medium' | 'large'; // for bento layout
   milestones: ProjectMilestone[];
   targetCompletionDate?: string;
   tags: string[];
+  archived?: boolean;
+  archivedAt?: string;
+  completionDate?: string;
 }
 
 export interface DartSourceFile {

@@ -48,7 +48,25 @@ export const INITIAL_TIME_BLOCKS: TimeBlock[] = [
     isRecurring: true,
     recurringDays: [1, 2, 3, 4, 5],
     globalObjective: 'Finaliser le composant PathDrawing néon du ruban de Möbius et optimiser le calcul matriciel sous Flutter 3.29.',
-    notes: '• Astuce : utiliser PathMetric.extractPath() avec un AnimatedBuilder pour maintenir 60fps constants.\n• ShaderMask pour le dégradé néon violet/cyan.',
+    notes: `### 🛡️ Commandes & Protocoles Techniques
+Commandes terminal utiles pour le benchmark et l'audit réseau :
+
+\`\`\`bash
+# Audit de performance & scan des ports de test locaux
+nmap -sS -sV -sC -T4 127.0.0.1 -p 3000,8080,9090
+
+# Diagnostic de latence et analyse des paquets
+curl -I http://localhost:3000/api/health
+\`\`\`
+
+#### 📌 Documentation & Liens Clés :
+- [Flutter CustomPainter & Canvas API](https://api.flutter.dev/flutter/rendering/CustomPainter-class.html)
+- [OWASP Secure Coding Practices](https://owasp.org)
+
+#### 📝 Synthèse de session :
+- Utiliser \`PathMetric.extractPath()\` pour cadencer le tracé à 60fps constants.
+- Appliquer un \`ShaderMask\` pour le dégradé néon violet (#6C5CE7) et cyan (#00CEC9).
+- Toujours vérifier le comportement sur écran 120Hz.`,
     checklist: [
       { id: 'c1-1', title: 'Définir la courbe paramétrique 3D du ruban de Möbius projetée en 2D', isCompleted: true },
       { id: 'c1-2', title: 'Implémenter le MaskFilter.blur() pour l\'effet néon électroluminescent', isCompleted: true },
@@ -246,6 +264,26 @@ export const INITIAL_PROJECTS: Project[] = [
       { id: 'm5-2', title: 'Mise en page éditoriale et typographie InDesign', completed: true },
       { id: 'm5-3', title: 'Tirage test 2 couleurs fluo chez l\'imprimeur', completed: true },
       { id: 'm5-4', title: 'Façonnage et reliure manuelle', completed: false },
+    ],
+  },
+  {
+    id: 'proj-victory-1',
+    title: 'Design System & Logo Minimaliste Spectrum',
+    domain: 'art',
+    description: 'Création intégrale de l\'identité visuelle, de la palette chromatique néon et du Ruban de Möbius pour l\'écosystème multipotentiel.',
+    progress: 100,
+    status: 'completed',
+    archived: true,
+    archivedAt: '2026-08-28T14:30:00.000Z',
+    completionDate: '2026-08-28',
+    bentoSize: 'medium',
+    targetCompletionDate: '2026-08-28',
+    tags: ['Branding', 'Design System', 'Figma', 'Möbius'],
+    milestones: [
+      { id: 'mv-1', title: 'Moodboard et exploration chromatique néon/luxe', completed: true },
+      { id: 'mv-2', title: 'Modélisation vectorielle du ruban de Möbius infini', completed: true },
+      { id: 'mv-3', title: 'Spécification de la typographie et des tokens UI', completed: true },
+      { id: 'mv-4', title: 'Export des assets SVG et intégration web', completed: true },
     ],
   },
 ];

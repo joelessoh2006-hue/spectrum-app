@@ -2960,7 +2960,7 @@ class _ActivityFicheScreenState extends State<ActivityFicheScreen> {
               const SizedBox(height: 20),
 
               // ==========================================
-              // 4. CHAMP DE SAISIE DE NOTES / JOURNAL DE SESSION
+              // 4. CHAMP DE SAISIE DE NOTES / JOURNAL DE SESSION (MARKDOWN ENRICHI)
               // ==========================================
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2970,7 +2970,7 @@ class _ActivityFicheScreenState extends State<ActivityFicheScreen> {
                       Icon(Icons.edit_note_rounded, size: 18, color: SpectrumTheme.textSecondary),
                       SizedBox(width: 6),
                       Text(
-                        'Journal de session & Notes',
+                        'Notes & Terminal (Markdown)',
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -2987,7 +2987,7 @@ class _ActivityFicheScreenState extends State<ActivityFicheScreen> {
                       border: Border.all(color: SpectrumTheme.border),
                     ),
                     child: const Text(
-                      'Firestore Auto-Sync',
+                      'Markdown • Firestore Sync',
                       style: TextStyle(
                         fontSize: 10,
                         fontFamily: 'monospace',
@@ -3000,6 +3000,7 @@ class _ActivityFicheScreenState extends State<ActivityFicheScreen> {
               ),
               const SizedBox(height: 8),
 
+              // Encart de saisie compatible syntaxe Markdown (blocs de code bash, listes, liens)
               Container(
                 decoration: BoxDecoration(
                   color: SpectrumTheme.background,
@@ -3013,12 +3014,13 @@ class _ActivityFicheScreenState extends State<ActivityFicheScreen> {
                   minLines: 3,
                   style: const TextStyle(
                     color: SpectrumTheme.textPrimary,
-                    fontSize: 13,
+                    fontFamily: 'monospace',
+                    fontSize: 12,
                     height: 1.5,
                   ),
                   decoration: const InputDecoration(
-                    hintText: 'Consignez vos notes, idées, liens ou bilan de fin de session...',
-                    hintStyle: TextStyle(color: SpectrumTheme.textMuted, fontSize: 13),
+                    hintText: 'Commandes terminal (nmap, bash), liens web, listes et notes Markdown...',
+                    hintStyle: TextStyle(color: SpectrumTheme.textMuted, fontSize: 13, fontFamily: 'sans-serif'),
                     border: InputBorder.none,
                   ),
                   onChanged: (text) => agenda.updateNotes(block.id, text),
@@ -3635,6 +3637,448 @@ service cloud.firestore {
         allow read, write: if isOwner(userId);
       }
     }
+  }
+}
+`,
+  },
+  {
+    path: 'lib/widgets/multipotential_balance_radar.dart',
+    name: 'multipotential_balance_radar.dart',
+    category: 'widget',
+    description: 'Widget Flutter de Radar d\'Équilibre & Anneau de répartition du temps pour profils multipotentiels avec calcul d\'harmonie.',
+    content: `import 'dart:math' as math;
+import 'package:flutter/material.dart';
+import '../models/time_block.dart';
+import '../models/domain.dart';
+import '../theme.dart';
+
+/// Période d'analyse du radar
+enum RadarPeriod { day, week, all }
+
+/// Mode d'affichage graphique
+enum RadarGraphType { donut, radar }
+
+/// Widget Flutter pour le Radar d'Équilibre Multipotentiel
+/// Calcule en temps réel la répartition du temps consacré à chaque pilier,
+/// génère un score d'harmonie (0-100%) et affiche un anneau ou polygone radar.
+class MultipotentialBalanceRadarWidget extends StatefulWidget {
+  final List<TimeBlock> blocks;
+  final List<DomainConfig> categories;
+  final DateTime selectedDate;
+
+  const MultipotentialBalanceRadarWidget({
+    super.key,
+    required this.blocks,
+    required this.categories,
+    required this.selectedDate,
+  });
+
+  @override
+  State<MultipotentialBalanceRadarWidget> createState() => _MultipotentialBalanceRadarWidgetState();
+}
+
+class _MultipotentialBalanceRadarWidgetState extends State<MultipotentialBalanceRadarWidget> {
+  RadarPeriod _period = RadarPeriod.week;
+  RadarGraphType _graphType = RadarGraphType.donut;
+  bool _isExpanded = true;
+  String? _hoveredDomainId;
+
+  @override
+  Widget build(BuildContext context) {
+    final Map<String, int> durations = {};
+    for (var cat in widget.categories) {
+      durations[cat.id] = 0;
+    }
+
+    // Filtrage des blocs selon la période sélectionnée
+    for (var b in widget.blocks) {
+      durations[b.domain] = (durations[b.domain] ?? 0) + b.durationMinutes;
+    }
+
+    final totalMinutes = durations.values.fold(0, (acc, v) => acc + v);
+    final totalHours = (totalMinutes / 60.0).toStringAsFixed(1);
+
+    // Calcul du score d'harmonie (0 - 100)
+    final n = widget.categories.length;
+    double balanceScore = 0;
+    if (totalMinutes > 0 && n > 1) {
+      final idealPercent = 100.0 / n;
+      double sumDiff = 0.0;
+      for (var cat in widget.categories) {
+        final pct = (durations[cat.id] ?? 0) / totalMinutes * 100;
+        sumDiff += (pct - idealPercent).abs();
+      }
+      final maxDiff = 2 * (100.0 - idealPercent);
+      balanceScore = (100.0 - (sumDiff / maxDiff) * 100).clamp(10, 100);
+    } else if (totalMinutes > 0) {
+      balanceScore = 100;
+    }
+
+    Color balanceColor = balanceScore >= 75
+        ? SpectrumTheme.domainCuriosity
+        : (balanceScore >= 50 ? SpectrumTheme.domainTech : SpectrumTheme.domainArt);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: SpectrumTheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: SpectrumTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.between,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: SpectrumTheme.domainTech.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.radar, color: SpectrumTheme.domainTech, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Radar d'Équilibre",
+                        style: TextStyle(
+                          color: SpectrumTheme.textPrimary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        "Harmonie : \${balanceScore.round()}% ($totalHours h cumulées)",
+                        style: TextStyle(color: balanceColor, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: Icon(
+                  _isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  color: SpectrumTheme.textSecondary,
+                ),
+                onPressed: () => setState(() => _isExpanded = !_isExpanded),
+              ),
+            ],
+          ),
+          if (_isExpanded) ...[
+            const SizedBox(height: 16),
+            // Détail des piliers avec jauges personnalisées
+            ...widget.categories.map((cat) {
+              final mins = durations[cat.id] ?? 0;
+              final pct = totalMinutes > 0 ? (mins / totalMinutes) : 0.0;
+              final hours = (mins / 60.0).toStringAsFixed(1);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.between,
+                      children: [
+                        Text(cat.name, style: const TextStyle(color: SpectrumTheme.textPrimary, fontSize: 13)),
+                        Text("\$hours h (\${(pct * 100).round()}%)", style: TextStyle(color: cat.color, fontSize: 12, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: pct,
+                        backgroundColor: SpectrumTheme.surfaceElevated,
+                        color: cat.color,
+                        minHeight: 6,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ]
+        ],
+      ),
+    );
+  }
+}
+`,
+  },
+  {
+    path: 'lib/widgets/pomodoro_flow_timer.dart',
+    name: 'pomodoro_flow_timer.dart',
+    category: 'widget',
+    description: 'Widget Flutter pour Minuteur Pomodoro (25/5 alternance ou continu) et lecteur d\'ambiances sonores Deep Work.',
+    content: `import 'dart:async';
+import 'package:flutter/material.dart';
+import '../theme.dart';
+
+enum TimerMode { pomodoro, continuous }
+enum PomodoroPhase { focus, shortBreak, longBreak }
+enum DeepWorkSound { rain, cafe, whitenoise, alpha, tibetan }
+
+/// Widget Flutter pour Minuteur Pomodoro & Sons d'ambiance Deep Work
+class PomodoroFlowTimerWidget extends StatefulWidget {
+  final int initialMinutes;
+  final Color pillarColor;
+  final String pillarName;
+  final VoidCallback? onComplete;
+
+  const PomodoroFlowTimerWidget({
+    super.key,
+    this.initialMinutes = 25,
+    this.pillarColor = SpectrumTheme.domainTech,
+    this.pillarName = 'Focus',
+    this.onComplete,
+  });
+
+  @override
+  State<PomodoroFlowTimerWidget> createState() => _PomodoroFlowTimerWidgetState();
+}
+
+class _PomodoroFlowTimerWidgetState extends State<PomodoroFlowTimerWidget> {
+  TimerMode _mode = TimerMode.pomodoro;
+  PomodoroPhase _phase = PomodoroPhase.focus;
+  int _cycle = 1;
+  late int _secondsLeft;
+  late int _totalSeconds;
+  bool _isRunning = false;
+  Timer? _timer;
+
+  DeepWorkSound _activeSound = DeepWorkSound.rain;
+  bool _isAudioPlaying = false;
+  double _volume = 0.5;
+
+  @override
+  void initState() {
+    super.initState();
+    _totalSeconds = widget.initialMinutes * 60;
+    _secondsLeft = _totalSeconds;
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _toggleTimer() {
+    setState(() {
+      _isRunning = !_isRunning;
+    });
+    if (_isRunning) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (_secondsLeft <= 1) {
+          timer.cancel();
+          _onPhaseEnd();
+        } else {
+          setState(() {
+            _secondsLeft--;
+          });
+        }
+      });
+    } else {
+      _timer?.cancel();
+    }
+  }
+
+  void _onPhaseEnd() {
+    setState(() {
+      _isRunning = false;
+      if (_mode == TimerMode.pomodoro) {
+        if (_phase == PomodoroPhase.focus) {
+          _phase = (_cycle % 4 == 0) ? PomodoroPhase.longBreak : PomodoroPhase.shortBreak;
+          _totalSeconds = (_phase == PomodoroPhase.longBreak ? 15 : 5) * 60;
+          _secondsLeft = _totalSeconds;
+        } else {
+          _phase = PomodoroPhase.focus;
+          _cycle++;
+          _totalSeconds = 25 * 60;
+          _secondsLeft = _totalSeconds;
+        }
+      } else {
+        widget.onComplete?.call();
+      }
+    });
+  }
+
+  String _formatTime(int sec) {
+    final m = sec ~/ 60;
+    final s = sec % 60;
+    return '\${m.toString().padLeft(2, '0')}:\${s.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isBreak = _phase != PomodoroPhase.focus;
+    final activeColor = isBreak ? SpectrumTheme.domainCuriosity : widget.pillarColor;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: SpectrumTheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: SpectrumTheme.border),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _mode == TimerMode.pomodoro ? "Pomodoro Flow (Cycle \$_cycle/4)" : "Focus Continu",
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: SpectrumTheme.textPrimary),
+              ),
+              SegmentedButton<TimerMode>(
+                segments: const [
+                  ButtonSegment(value: TimerMode.pomodoro, label: Text("Pomodoro")),
+                  ButtonSegment(value: TimerMode.continuous, label: Text("Continu")),
+                ],
+                selected: {_mode},
+                onSelectionChanged: (set) => setState(() => _mode = set.first),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _formatTime(_secondsLeft),
+            style: TextStyle(
+              fontSize: 54,
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.w900,
+              color: _isRunning ? activeColor : SpectrumTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _isRunning ? Colors.redAccent : activeColor,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            icon: Icon(_isRunning ? Icons.pause : Icons.play_arrow, color: Colors.white),
+            label: Text(_isRunning ? "Pause" : "Démarrer", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            onPressed: _toggleTimer,
+          ),
+        ],
+      ),
+    );
+  }
+}
+`,
+  },
+  {
+    path: 'lib/views/trophies_gallery_view.dart',
+    name: 'trophies_gallery_view.dart',
+    category: 'screen',
+    description: 'Galerie des Trophées : archivage et valorisation des projets terminés à 100% avec possibilité de restauration.',
+    content: `import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/project.dart';
+import '../providers/projects_provider.dart';
+import '../theme.dart';
+
+class TrophiesGalleryView extends StatelessWidget {
+  const TrophiesGalleryView({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<ProjectsProvider>(context);
+    final trophies = provider.projects.where((p) => p.archived || p.status == 'archived').toList();
+
+    return Scaffold(
+      backgroundColor: SpectrumTheme.bgCanvas,
+      appBar: AppBar(
+        title: const Row(
+          children: [
+            Icon(Icons.emoji_events, color: Colors.amber),
+            SizedBox(width: 8),
+            Text("Galerie des Trophées"),
+          ],
+        ),
+        backgroundColor: SpectrumTheme.bgSurface,
+      ),
+      body: trophies.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.emoji_events_outlined, size: 64, color: Colors.amber),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text("Aucun trophée pour le moment",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: SpectrumTheme.textPrimary)),
+                  const SizedBox(height: 8),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      "Quand un projet atteint 100%, archivez-le pour libérer votre vue Bento tout en immortalisant vos victoires !",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: SpectrumTheme.textSecondary, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: trophies.length,
+              itemBuilder: (context, index) {
+                final project = trophies[index];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: SpectrumTheme.bgSurface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.between,
+                        children: [
+                          Chip(
+                            avatar: const Icon(Icons.emoji_events, size: 16, color: Colors.amber),
+                            label: const Text("Victoire 100%", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                            backgroundColor: Colors.amber.withOpacity(0.15),
+                          ),
+                          TextButton.icon(
+                            icon: const Icon(Icons.restore, size: 16),
+                            label: const Text("Restaurer"),
+                            onPressed: () => provider.unarchiveProject(project.id),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(project.title,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: SpectrumTheme.textPrimary)),
+                      if (project.description != null) ...[
+                        const SizedBox(height: 4),
+                        Text(project.description!,
+                            style: const TextStyle(fontSize: 13, color: SpectrumTheme.textSecondary)),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+    );
   }
 }
 `,

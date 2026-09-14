@@ -24,6 +24,9 @@ interface AddBlockModalProps {
   onAddBlocks?: (blocks: Omit<TimeBlock, 'id'>[]) => void;
   initialBlock?: TimeBlock | null;
   initialPillarId?: string | null;
+  initialProjectId?: string | null;
+  initialTitle?: string | null;
+  initialObjective?: string | null;
   onUpdateBlock?: (block: TimeBlock) => void;
   defaultDate?: Date;
   projects?: Project[];
@@ -65,6 +68,9 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
   onAddBlocks,
   initialBlock,
   initialPillarId,
+  initialProjectId,
+  initialTitle,
+  initialObjective,
   onUpdateBlock,
   defaultDate,
   projects = [],
@@ -85,14 +91,18 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
   }, [categories]);
 
   // Form State
-  const [title, setTitle] = useState(initialBlock?.title || '');
+  const [title, setTitle] = useState(initialBlock?.title || initialTitle || '');
   const [domain, setDomain] = useState<string>(() => {
     return initialPillarId || initialBlock?.domain || activeCategories[0]?.id || 'tech';
   });
-  const [selectedProjectId, setSelectedProjectId] = useState<string>(initialBlock?.projectId || '');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(
+    initialBlock?.projectId || initialProjectId || ''
+  );
   const [startTime, setStartTime] = useState(initialBlock?.startTime || '14:00');
   const [endTime, setEndTime] = useState(initialBlock?.endTime || '15:30');
-  const [globalObjective, setGlobalObjective] = useState(initialBlock?.globalObjective || '');
+  const [globalObjective, setGlobalObjective] = useState(
+    initialBlock?.globalObjective || initialObjective || (initialTitle ? `Accomplir le jalon : ${initialTitle}` : '')
+  );
 
   // Scheduling State
   const [isSpecificDate, setIsSpecificDate] = useState<boolean>(() => {
@@ -188,32 +198,48 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
       }
     } else {
       // Mode création d'un nouveau bloc
-      setTitle('');
+      setTitle(initialTitle || '');
       // Résolution sécurisée du pilier
       const targetPillar =
         initialPillarId && activeCategories.some((c) => c.id === initialPillarId)
           ? initialPillarId
           : initialPillarId || activeCategories[0]?.id || 'tech';
       setDomain(targetPillar);
-      setSelectedProjectId('');
+      setSelectedProjectId(initialProjectId || '');
       setStartTime('14:00');
       setEndTime('15:30');
-      setGlobalObjective('');
+      setGlobalObjective(
+        initialObjective || (initialTitle ? `Accomplir le jalon : ${initialTitle}` : '')
+      );
       setIsSpecificDate(true);
       setScheduledDate(getFormattedDateString(defaultDate));
       setSelectedDays([1, 2, 3, 4, 5]);
-      setSubtasks([
-        { id: `st-1`, text: 'Spécification et cadrage de la session', completed: false },
-        { id: `st-2`, text: 'Réalisation du livrable ou flow créatif', completed: false },
-      ]);
+      if (initialTitle) {
+        setSubtasks([
+          { id: `st-1`, text: initialTitle, completed: false },
+        ]);
+      } else {
+        setSubtasks([
+          { id: `st-1`, text: 'Spécification et cadrage de la session', completed: false },
+          { id: `st-2`, text: 'Réalisation du livrable ou flow créatif', completed: false },
+        ]);
+      }
       setNewSubtaskText('');
     }
-  }, [isOpen, initialBlock, initialPillarId, defaultDate, activeCategories]);
+  }, [
+    isOpen,
+    initialBlock,
+    initialPillarId,
+    initialProjectId,
+    initialTitle,
+    initialObjective,
+    defaultDate,
+    activeCategories,
+  ]);
 
-  if (!isOpen) return null;
-
-  // Calcul du nombre de jours / sessions à générer selon l'horizon choisi
+  // Calcul du nombre de jours / sessions à générer selon l'horizon choisi (Appelé au premier niveau sans condition)
   const calculatedDates = useMemo(() => {
+    if (!isOpen) return [];
     if (isSpecificDate) return [scheduledDate];
     if (selectedDays.length === 0) return [];
 
@@ -244,7 +270,9 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
     }
 
     return dates;
-  }, [isSpecificDate, scheduledDate, selectedDays, recurrenceHorizon, customEndDate]);
+  }, [isOpen, isSpecificDate, scheduledDate, selectedDays, recurrenceHorizon, customEndDate]);
+
+  if (!isOpen) return null;
 
   // Subtask Handlers
   const handleAddSubtask = () => {
@@ -429,6 +457,23 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+          {/* Bannière de liaison directe Bento -> Agenda */}
+          {initialTitle && (
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-[#6C5CE7]/10 border border-[#6C5CE7]/30 text-xs text-[var(--text-primary)] animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="w-7 h-7 rounded-xl bg-[#6C5CE7]/20 flex items-center justify-center shrink-0">
+                <Sparkles className="w-4 h-4 text-[#6C5CE7]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-[#6C5CE7] leading-tight">
+                  Passerelle Jalon Bento ➔ Agenda
+                </p>
+                <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-tight">
+                  Le titre, le pilier et le projet ont été pré-remplis automatiquement. Choisissez votre horaire et validez !
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* 1. Pilier Multipotentiel Dynamique */}
           <div>
             <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">
@@ -683,10 +728,25 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
                 <span className="text-[11px] font-bold text-[var(--text-primary)] uppercase tracking-wider">
                   Étapes du Projet / Checklist
                 </span>
+                <span className="text-[10px] text-[var(--text-muted)] font-normal hidden sm:inline">
+                  (Optionnel - laissez vide pour le mode Zen tâche unique)
+                </span>
               </div>
-              <span className="text-[10px] font-mono text-[var(--text-secondary)] px-2 py-0.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-card)]">
-                {subtasks.filter((s) => s.completed).length}/{subtasks.length} achevée(s)
-              </span>
+              <div className="flex items-center gap-2">
+                {subtasks.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSubtasks([])}
+                    className="text-[10px] text-[var(--text-muted)] hover:text-[#FF7675] transition px-1.5 py-0.5 rounded hover:bg-[var(--bg-surface)] cursor-pointer"
+                    title="Vider la checklist pour passer en mode tâche unique pure"
+                  >
+                    Vider (Mode Zen)
+                  </button>
+                )}
+                <span className="text-[10px] font-mono text-[var(--text-secondary)] px-2 py-0.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-card)]">
+                  {subtasks.filter((s) => s.completed).length}/{subtasks.length} achevée(s)
+                </span>
+              </div>
             </div>
 
             {/* Saisie interactive avec bouton + Ajouter & validation Entrée */}

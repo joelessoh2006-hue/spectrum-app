@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { DomainId, Project, DomainConfig } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { getPillarIcon } from '../utils/iconMap';
-import { X, Plus, Target, Tag } from 'lucide-react';
+import { X, Plus, Target, Tag, Trash2 } from 'lucide-react';
 
 interface AddProjectModalProps {
   isOpen: boolean;
@@ -36,9 +36,24 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
   const [description, setDescription] = useState('');
   const [bentoSize, setBentoSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [tagsInput, setTagsInput] = useState('');
-  const [firstMilestone, setFirstMilestone] = useState('');
+  const [milestonesList, setMilestonesList] = useState<string[]>([
+    'Cadrage initial du projet',
+    'Sortie du premier prototype',
+  ]);
+  const [newMilestoneText, setNewMilestoneText] = useState('');
 
   if (!isOpen) return null;
+
+  const handleAddMilestoneItem = () => {
+    const trimmed = newMilestoneText.trim();
+    if (!trimmed) return;
+    setMilestonesList((prev) => [...prev, trimmed]);
+    setNewMilestoneText('');
+  };
+
+  const handleRemoveMilestoneItem = (index: number) => {
+    setMilestonesList((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,18 +64,26 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
       .map((t) => t.trim())
       .filter(Boolean);
 
-    const milestones = firstMilestone.trim()
-      ? [
-          { id: `m-${Date.now()}-1`, title: firstMilestone.trim(), completed: false },
-          { id: `m-${Date.now()}-2`, title: 'Finalisation et revue', completed: false },
-        ]
-      : [{ id: `m-${Date.now()}-1`, title: 'Cadrage initial du projet', completed: true }];
+    // Merge any text typed in newMilestoneText if not yet clicked "+"
+    const allMilestoneTexts = [...milestonesList];
+    if (newMilestoneText.trim() && !allMilestoneTexts.includes(newMilestoneText.trim())) {
+      allMilestoneTexts.push(newMilestoneText.trim());
+    }
+
+    const milestones =
+      allMilestoneTexts.length > 0
+        ? allMilestoneTexts.map((mTitle, idx) => ({
+            id: `m-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 5)}`,
+            title: mTitle,
+            completed: false,
+          }))
+        : [{ id: `m-${Date.now()}-1`, title: 'Cadrage initial du projet', completed: false }];
 
     onAdd({
       title: title.trim(),
       domain,
       description: description.trim() || "Projet à long terme dans l'écosystème multipotentiel.",
-      progress: 25,
+      progress: 0,
       status: 'in_progress',
       bentoSize,
       tags: tags.length ? tags : ['Multipotentiel', 'Sprint'],
@@ -70,7 +93,8 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
     setTitle('');
     setDescription('');
     setTagsInput('');
-    setFirstMilestone('');
+    setMilestonesList(['Cadrage initial du projet', 'Sortie du premier prototype']);
+    setNewMilestoneText('');
     onClose();
   };
 
@@ -189,18 +213,65 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
             </div>
           </div>
 
-          {/* Milestone */}
+          {/* Milestones / Tasks List */}
           <div>
-            <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider flex items-center gap-1">
-              <Target className="w-3.5 h-3.5" /> Première étape clé (Milestone)
-            </label>
-            <input
-              type="text"
-              placeholder="Ex: Sortie de la maquette Alpha..."
-              value={firstMilestone}
-              onChange={(e) => setFirstMilestone(e.target.value)}
-              className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl px-4 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7]"
-            />
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1">
+                <Target className="w-3.5 h-3.5 text-[#6C5CE7]" /> Étapes clés &amp; Tâches initiales ({milestonesList.length})
+              </label>
+              <span className="text-[10px] text-[var(--text-muted)]">Ajoutez-en d'autres plus tard</span>
+            </div>
+
+            {/* Existing milestones in list */}
+            {milestonesList.length > 0 && (
+              <div className="space-y-1.5 mb-2.5 max-h-36 overflow-y-auto pr-1">
+                {milestonesList.map((m, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs text-[var(--text-primary)]"
+                  >
+                    <span className="truncate flex-1">
+                      <span className="text-[var(--text-muted)] mr-1.5 font-mono">#{idx + 1}</span>
+                      {m}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMilestoneItem(idx)}
+                      className="text-[var(--text-muted)] hover:text-[#FF7675] p-1 rounded-lg transition"
+                      title="Supprimer cette étape"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Input to add a new milestone */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Ex: Rédiger le cahier des charges..."
+                value={newMilestoneText}
+                onChange={(e) => setNewMilestoneText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddMilestoneItem();
+                  }
+                }}
+                className="flex-1 bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7]"
+              />
+              <button
+                type="button"
+                onClick={handleAddMilestoneItem}
+                disabled={!newMilestoneText.trim()}
+                className="px-3 py-2 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs font-semibold text-[var(--text-primary)] hover:border-[#6C5CE7] hover:text-[#6C5CE7] disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Ajouter</span>
+              </button>
+            </div>
           </div>
 
           {/* Submit */}

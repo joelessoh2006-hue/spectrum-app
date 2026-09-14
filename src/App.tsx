@@ -13,6 +13,7 @@ import {
   saveUserTimeBlock,
   deleteUserTimeBlock,
   saveUserProject,
+  deleteUserProject,
   saveUserCategory,
   deleteUserCategory,
   seedUserDefaultCategories,
@@ -84,6 +85,12 @@ export default function App() {
   const [isAddBlockOpen, setIsAddBlockOpen] = useState(false);
   const [editingBlock, setEditingBlock] = useState<TimeBlock | null>(null);
   const [selectedPillarForAdd, setSelectedPillarForAdd] = useState<string | null>(null);
+  const [prefilledBlockData, setPrefilledBlockData] = useState<{
+    title?: string;
+    domain?: string;
+    projectId?: string;
+    objective?: string;
+  } | null>(null);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
   const [isManagePillarsOpen, setIsManagePillarsOpen] = useState(false);
 
@@ -240,6 +247,7 @@ export default function App() {
 
   const handleOpenAddBlockModal = (pillarId?: string) => {
     setEditingBlock(null);
+    setPrefilledBlockData(null);
     setSelectedPillarForAdd(pillarId || null);
     setIsAddBlockOpen(true);
   };
@@ -248,11 +256,25 @@ export default function App() {
     setIsAddBlockOpen(false);
     setEditingBlock(null);
     setSelectedPillarForAdd(null);
+    setPrefilledBlockData(null);
   };
 
   const handleOpenEditModal = (block: TimeBlock) => {
     setEditingBlock(block);
+    setPrefilledBlockData(null);
     setSelectedPillarForAdd(block.domain || null);
+    setIsAddBlockOpen(true);
+  };
+
+  const handleScheduleMilestone = (project: Project, milestoneTitle: string) => {
+    setEditingBlock(null);
+    setSelectedPillarForAdd(project.domain);
+    setPrefilledBlockData({
+      title: milestoneTitle,
+      domain: project.domain,
+      projectId: project.id,
+      objective: `Accomplir le jalon : ${milestoneTitle} (${project.title})`,
+    });
     setIsAddBlockOpen(true);
   };
 
@@ -372,6 +394,134 @@ export default function App() {
         await saveUserProject(user.uid, updatedProject);
       } catch (err) {
         console.error('Erreur update milestone Firestore:', err);
+      }
+    }
+  };
+
+  const handleAddProjectMilestone = async (projectId: string, title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+
+    const targetProject = projects.find((p) => p.id === projectId);
+    if (!targetProject) return;
+
+    const newMilestone = {
+      id: `m_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      title: trimmed,
+      completed: false,
+    };
+
+    const updatedMilestones = [...targetProject.milestones, newMilestone];
+    const completedCount = updatedMilestones.filter((m) => m.completed).length;
+    const progress = Math.round((completedCount / updatedMilestones.length) * 100);
+
+    const updatedProject: Project = {
+      ...targetProject,
+      milestones: updatedMilestones,
+      progress,
+    };
+
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? updatedProject : p)));
+
+    if (user) {
+      try {
+        await saveUserProject(user.uid, updatedProject);
+      } catch (err) {
+        console.error('Erreur ajout milestone Firestore:', err);
+      }
+    }
+  };
+
+  const handleDeleteProjectMilestone = async (projectId: string, milestoneId: string) => {
+    const targetProject = projects.find((p) => p.id === projectId);
+    if (!targetProject) return;
+
+    const updatedMilestones = targetProject.milestones.filter((m) => m.id !== milestoneId);
+    const completedCount = updatedMilestones.filter((m) => m.completed).length;
+    const progress =
+      updatedMilestones.length > 0
+        ? Math.round((completedCount / updatedMilestones.length) * 100)
+        : 0;
+
+    const updatedProject: Project = {
+      ...targetProject,
+      milestones: updatedMilestones,
+      progress,
+    };
+
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? updatedProject : p)));
+
+    if (user) {
+      try {
+        await saveUserProject(user.uid, updatedProject);
+      } catch (err) {
+        console.error('Erreur suppression milestone Firestore:', err);
+      }
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+
+    if (user) {
+      try {
+        await deleteUserProject(user.uid, projectId);
+      } catch (err) {
+        console.error('Erreur suppression projet Firestore:', err);
+      }
+    }
+  };
+
+  const handleArchiveProject = async (projectId: string) => {
+    const target = projects.find((p) => p.id === projectId);
+    if (!target) return;
+
+    const completedMilestones = target.milestones.map((m) => ({ ...m, completed: true }));
+    const nowIso = new Date().toISOString();
+    const formattedDate = new Date().toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+
+    const updatedProject: Project = {
+      ...target,
+      status: 'completed',
+      progress: 100,
+      archived: true,
+      archivedAt: nowIso,
+      completionDate: formattedDate,
+      milestones: completedMilestones,
+    };
+
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? updatedProject : p)));
+
+    if (user) {
+      try {
+        await saveUserProject(user.uid, updatedProject);
+      } catch (err) {
+        console.error('Erreur archivage projet Firestore:', err);
+      }
+    }
+  };
+
+  const handleUnarchiveProject = async (projectId: string) => {
+    const target = projects.find((p) => p.id === projectId);
+    if (!target) return;
+
+    const updatedProject: Project = {
+      ...target,
+      status: 'in_progress',
+      archived: false,
+    };
+
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? updatedProject : p)));
+
+    if (user) {
+      try {
+        await saveUserProject(user.uid, updatedProject);
+      } catch (err) {
+        console.error('Erreur désarchivage projet Firestore:', err);
       }
     }
   };
@@ -607,6 +757,7 @@ export default function App() {
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             onSelectBlock={handleSelectBlock}
+            onUpdateBlock={handleUpdateBlock}
             onOpenAddModal={handleOpenAddBlockModal}
             onOpenProjects={() => setCurrentView('bento')}
             onSeedTemplates={handleSeedTemplates}
@@ -635,6 +786,12 @@ export default function App() {
             onOpenAddModal={() => setIsAddProjectOpen(true)}
             onSelectBlock={handleSelectBlock}
             onToggleMilestone={handleToggleMilestone}
+            onAddMilestone={handleAddProjectMilestone}
+            onDeleteMilestone={handleDeleteProjectMilestone}
+            onScheduleMilestone={handleScheduleMilestone}
+            onDeleteProject={handleDeleteProject}
+            onArchiveProject={handleArchiveProject}
+            onUnarchiveProject={handleUnarchiveProject}
             onSeedProjects={handleSeedTemplates}
             categories={categories}
             onOpenManagePillars={() => setIsManagePillarsOpen(true)}
@@ -688,23 +845,28 @@ export default function App() {
       />
 
       {/* 10. Modals d'ajout et d'édition de bloc de temps et de projet protégées par ErrorBoundary */}
-      <ErrorBoundary
-        onReset={handleCloseAddBlockModal}
-        fallbackTitle="Erreur dans la modale d'ajout de bloc"
-      >
-        <AddBlockModal
-          isOpen={isAddBlockOpen}
-          onClose={handleCloseAddBlockModal}
-          onAddBlock={handleAddBlock}
-          onAddBlocks={handleAddBlocks}
-          initialBlock={editingBlock}
-          initialPillarId={selectedPillarForAdd}
-          onUpdateBlock={handleUpdateBlock}
-          projects={projects}
-          categories={categories}
-          defaultDate={selectedDate}
-        />
-      </ErrorBoundary>
+      {isAddBlockOpen && (
+        <ErrorBoundary
+          onReset={handleCloseAddBlockModal}
+          fallbackTitle="Erreur dans la modale d'ajout de bloc"
+        >
+          <AddBlockModal
+            isOpen={isAddBlockOpen}
+            onClose={handleCloseAddBlockModal}
+            onAddBlock={handleAddBlock}
+            onAddBlocks={handleAddBlocks}
+            initialBlock={editingBlock}
+            initialPillarId={selectedPillarForAdd}
+            initialProjectId={prefilledBlockData?.projectId}
+            initialTitle={prefilledBlockData?.title}
+            initialObjective={prefilledBlockData?.objective}
+            onUpdateBlock={handleUpdateBlock}
+            projects={projects}
+            categories={categories}
+            defaultDate={selectedDate}
+          />
+        </ErrorBoundary>
+      )}
 
       <AddProjectModal
         isOpen={isAddProjectOpen}

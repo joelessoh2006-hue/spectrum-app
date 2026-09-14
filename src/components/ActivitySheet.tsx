@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TimeBlock, DomainConfig } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { getPillarIcon } from '../utils/iconMap';
+import { PomodoroFlowTimer } from './PomodoroFlowTimer';
+import { MarkdownNotesEditor } from './MarkdownNotesEditor';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -15,6 +17,12 @@ import {
   Save,
   Check,
   RotateCcw,
+  Play,
+  Pause,
+  Maximize2,
+  Minimize2,
+  Flame,
+  ListChecks,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -103,11 +111,35 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
   const completedItems = currentSubtasks.filter((i) => i.completed).length;
   const progressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
+  // Zen Mode state (auto-detected when no subtasks, with user toggle to add subtasks if desired)
+  const isZenMode = totalItems === 0;
+  const [showAddSubtasksInZen, setShowAddSubtasksInZen] = useState(false);
+
   const showSavedBadge = () => {
     setSaveStatus('Enregistré');
     setTimeout(() => {
       setSaveStatus(null);
     }, 2000);
+  };
+
+  // Complete block directly (for Zen mode single task)
+  const handleToggleBlockCompletion = () => {
+    const nextCompleted = !block.completed;
+    if (nextCompleted) {
+      try {
+        confetti({
+          particleCount: 60,
+          spread: 90,
+          origin: { y: 0.55 },
+          colors: [domainConfig.color, '#6C5CE7', '#55E6C1', '#ffffff'],
+        });
+      } catch (_) {}
+    }
+    onUpdateBlock({
+      ...block,
+      completed: nextCompleted,
+    });
+    showSavedBadge();
   };
 
   const handleToggleTask = (itemId: string) => {
@@ -135,8 +167,12 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
       isCompleted: s.completed,
     }));
 
+    // Auto-mark block completed if all subtasks are finished
+    const allDone = updatedSubtasks.length > 0 && updatedSubtasks.every((s) => s.completed);
+
     onUpdateBlock({
       ...block,
+      completed: allDone,
       subtasks: updatedSubtasks,
       checklist: updatedChecklist,
     });
@@ -258,186 +294,327 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
         </div>
       </div>
 
-      {/* Title */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[var(--text-primary)]">
-          {block.title}
-        </h1>
-        {domainConfig.label && (
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">{domainConfig.label}</p>
-        )}
-      </div>
-
-      {/* 1. OBJECTIF GLOBAL CARD */}
-      {block.globalObjective && (
-        <div
-          className="relative bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-5 sm:p-6 shadow-sm overflow-hidden"
-        >
-          <div
-            className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl pointer-events-none opacity-10"
-            style={{ backgroundColor: domainConfig.color }}
-          />
-
-          <div className="flex items-center gap-2 mb-2.5">
-            <div
-              className="w-7 h-7 rounded-xl flex items-center justify-center"
-              style={{
-                backgroundColor: `${domainConfig.color}20`,
-                color: domainConfig.color,
-              }}
-            >
-              <Flag className="w-4 h-4" />
-            </div>
-            <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: domainConfig.color }}>
-              Objectif Global (Roadmap)
-            </h3>
-          </div>
-
-          <p className="text-[var(--text-primary)] text-sm md:text-base leading-relaxed font-normal">
-            {block.globalObjective}
-          </p>
-        </div>
-      )}
-
-      {/* 2. SOUS-CHECKLIST INTERACTIVE AVEC % */}
-      <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5" style={{ color: domainConfig.color }} />
-            <h2 className="text-base font-bold text-[var(--text-primary)]">
-              Étapes du Projet / Checklist
-            </h2>
-          </div>
-          <div
-            className="px-3 py-1 rounded-full text-xs font-bold border font-mono"
-            style={{
-              backgroundColor: `${domainConfig.color}15`,
-              borderColor: `${domainConfig.color}35`,
-              color: domainConfig.color,
-            }}
-          >
-            {completedItems}/{totalItems} ({progressPercent}%)
-          </div>
-        </div>
-
-        {/* Animated Progress Bar */}
-        <div className="space-y-1.5">
-          <div className="w-full h-2 bg-[var(--bg-surface-elevated)] rounded-full overflow-hidden border border-[var(--border-card)]">
-            <div
-              className="h-full rounded-full transition-all duration-500 ease-out"
-              style={{
-                width: `${progressPercent}%`,
-                backgroundColor: domainConfig.color,
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Checklist Items list */}
-        <div className="space-y-2 pt-1">
-          {currentSubtasks.length === 0 ? (
-            <p className="text-xs text-[var(--text-secondary)] italic py-2">
-              Aucune étape dans cette feuille de route pour le moment.
-            </p>
-          ) : (
-            currentSubtasks.map((item) => (
-              <div
-                key={item.id}
-                className={`group flex items-start justify-between gap-3 p-3 rounded-2xl border transition-all ${
-                  item.completed
-                    ? 'bg-[var(--bg-surface-elevated)]/60 border-[var(--border-card)] opacity-70'
-                    : 'bg-[var(--bg-surface-elevated)] border-[var(--border-card)] hover:border-[var(--border-highlight)]'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => handleToggleTask(item.id)}
-                  className="flex items-start gap-3 text-left flex-1"
-                >
-                  <div className="mt-0.5 shrink-0">
-                    <div
-                      className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
-                        item.completed
-                          ? 'shadow-sm'
-                          : 'border-[var(--border-card)] hover:border-[var(--text-secondary)] bg-transparent'
-                      }`}
-                      style={{
-                        backgroundColor: item.completed ? domainConfig.color : 'transparent',
-                        borderColor: item.completed ? domainConfig.color : undefined,
-                      }}
-                    >
-                      {item.completed && (
-                        <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
-                      )}
-                    </div>
-                  </div>
-                  <span
-                    className={`text-sm leading-snug transition-all ${
-                      item.completed
-                        ? 'line-through text-[var(--text-muted)]'
-                        : 'text-[var(--text-primary)] font-medium'
-                    }`}
-                  >
-                    {item.text}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleDeleteTask(item.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 text-[var(--text-muted)] hover:text-[#FF7675] rounded-lg transition-opacity"
-                  title="Supprimer cette étape"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))
+      {/* TITLE & METADATA */}
+      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[var(--text-primary)]">
+            {block.title}
+          </h1>
+          {domainConfig.label && (
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">{domainConfig.label}</p>
           )}
         </div>
 
-        {/* Add Item form */}
-        <form onSubmit={handleAddTask} className="flex items-center gap-2 pt-2">
-          <input
-            type="text"
-            placeholder="Ajouter une action concrète..."
-            value={newTaskTitle}
-            onChange={(e) => setNewTaskTitle(e.target.value)}
-            className="flex-1 bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7]"
+        {/* Indicator if in Zen Mode */}
+        {isZenMode && !showAddSubtasksInZen && (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#55E6C1]/10 text-[#55E6C1] border border-[#55E6C1]/20 text-xs font-semibold self-start sm:self-auto">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Mode Zen • Tâche Unique</span>
+          </div>
+        )}
+      </div>
+
+      {/* =========================================================================
+          BRANCHEMENT AUTOMATIQUE :
+          A. MODE ZEN / TÂCHE UNIQUE (Si aucune sous-tâche et l'utilisateur n'a pas forcé le mode checklist)
+          ========================================================================= */}
+      {isZenMode && !showAddSubtasksInZen ? (
+        <div className="space-y-6 animate-fadeIn">
+          {/* CARTE OBJECTIF IMMERSIF EN GRAND */}
+          <div className="relative bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-3xl p-6 md:p-8 shadow-sm overflow-hidden text-center sm:text-left">
+            {/* Lueur d'ambiance aux couleurs du pilier */}
+            <div
+              className="absolute -top-12 -right-12 w-48 h-48 rounded-full blur-3xl pointer-events-none opacity-20 transition-all"
+              style={{ backgroundColor: domainConfig.color }}
+            />
+
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-8 h-8 rounded-xl flex items-center justify-center shadow-inner"
+                  style={{
+                    backgroundColor: `${domainConfig.color}20`,
+                    color: domainConfig.color,
+                  }}
+                >
+                  <Flag className="w-4 h-4" />
+                </div>
+                <span
+                  className="text-xs font-bold uppercase tracking-wider"
+                  style={{ color: domainConfig.color }}
+                >
+                  Objectif de la Session
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {block.completed ? (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#55E6C1]/15 text-[#55E6C1] text-xs font-bold border border-[#55E6C1]/30">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    Session Terminée
+                  </span>
+                ) : (
+                  <span className="text-xs text-[var(--text-muted)] font-medium">
+                    Session unique sans sous-découpage
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Objectif affiché en grand */}
+            <h2 className="text-xl md:text-2xl font-bold text-[var(--text-primary)] leading-snug tracking-tight">
+              {block.globalObjective || block.title}
+            </h2>
+
+            {block.globalObjective && block.globalObjective !== block.title && (
+              <p className="text-sm text-[var(--text-secondary)] mt-2 font-medium">
+                Focus exclusif : consacrez ce bloc à l'atteinte intégrale de cet objectif.
+              </p>
+            )}
+          </div>
+
+          {/* MINUTEUR POMODORO & AMBIANCES DEEP WORK */}
+          <PomodoroFlowTimer
+            initialDurationMinutes={block.durationMinutes || 25}
+            pillarColor={domainConfig.color}
+            pillarName={domainConfig.name}
+            blockTitle={block.title}
+            onTimerComplete={handleToggleBlockCompletion}
           />
-          <button
-            type="submit"
-            disabled={!newTaskTitle.trim()}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 text-white shadow-sm"
-            style={{
-              backgroundColor: domainConfig.color,
-            }}
-          >
-            <Plus className="w-4 h-4" />
-            <span>Ajouter</span>
-          </button>
-        </form>
-      </div>
 
-      {/* 3. ZONE DE NOTES (Auto-save) */}
-      <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-5 sm:p-6 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <Save className="w-4 h-4 text-[var(--text-secondary)]" />
-            <span>Zone de Notes & Synthèse</span>
-          </h3>
-          <span className="text-[11px] font-mono text-[var(--text-muted)]">
-            Sauvegarde auto Firestore
-          </span>
+          {/* GROS BOUTON DE VALIDATION UNIQUE */}
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-3xl p-6 md:p-8 shadow-sm flex flex-col items-center justify-center text-center">
+            <button
+              type="button"
+              onClick={handleToggleBlockCompletion}
+              className={`w-full max-w-md py-4 px-6 rounded-2xl font-bold text-base md:text-lg flex items-center justify-center gap-3 transition-all transform active:scale-95 shadow-md cursor-pointer ${
+                block.completed
+                  ? 'bg-[#55E6C1]/20 text-[#55E6C1] border-2 border-[#55E6C1] hover:bg-[#55E6C1]/30'
+                  : 'text-white hover:brightness-105 shadow-lg'
+              }`}
+              style={
+                block.completed
+                  ? {}
+                  : {
+                      backgroundColor: domainConfig.color,
+                      boxShadow: `0 10px 30px -5px ${domainConfig.color}50`,
+                    }
+              }
+            >
+              <div
+                className={`w-7 h-7 rounded-xl flex items-center justify-center ${
+                  block.completed ? 'bg-[#55E6C1] text-black' : 'bg-white/20 text-white'
+                }`}
+              >
+                <Check className="w-5 h-5 stroke-[3]" />
+              </div>
+              <span>
+                {block.completed ? 'Objectif Accompli ! (Cliquer pour rouvrir)' : 'Valider la Session & l’Objectif'}
+              </span>
+            </button>
+
+            <p className="text-xs text-[var(--text-secondary)] mt-3">
+              En validant, le bloc passe en vert dans votre Agenda et compte dans vos statistiques du jour.
+            </p>
+
+            {/* Lien discret pour ajouter un découpage si nécessaire */}
+            <div className="mt-4 pt-3 border-t border-[var(--border-card)] w-full text-center">
+              <button
+                type="button"
+                onClick={() => setShowAddSubtasksInZen(true)}
+                className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[#6C5CE7] transition font-medium"
+              >
+                <ListChecks className="w-3.5 h-3.5" />
+                <span>Besoin d'étapes ? Découper ce bloc en checklist</span>
+              </button>
+            </div>
+          </div>
         </div>
+      ) : (
+        /* =========================================================================
+            B. VUE CLASSIQUE : AVEC SOUS-CHECKLIST ET %
+            ========================================================================= */
+        <div className="space-y-6">
+          {/* 1. OBJECTIF GLOBAL CARD */}
+          {block.globalObjective && (
+            <div className="relative bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-5 sm:p-6 shadow-sm overflow-hidden">
+              <div
+                className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl pointer-events-none opacity-10"
+                style={{ backgroundColor: domainConfig.color }}
+              />
 
-        <textarea
-          rows={5}
-          value={block.notes || ''}
-          onChange={(e) => handleNotesChange(e.target.value)}
-          placeholder="Prenez des notes de séance, consigner les réflexions, les métriques et liens utiles..."
-          className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl p-3.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7] leading-relaxed font-sans"
-        />
-      </div>
+              <div className="flex items-center gap-2 mb-2.5">
+                <div
+                  className="w-7 h-7 rounded-xl flex items-center justify-center"
+                  style={{
+                    backgroundColor: `${domainConfig.color}20`,
+                    color: domainConfig.color,
+                  }}
+                >
+                  <Flag className="w-4 h-4" />
+                </div>
+                <h3
+                  className="text-xs font-bold uppercase tracking-wider"
+                  style={{ color: domainConfig.color }}
+                >
+                  Objectif Global (Roadmap)
+                </h3>
+              </div>
+
+              <p className="text-[var(--text-primary)] text-sm md:text-base leading-relaxed font-normal">
+                {block.globalObjective}
+              </p>
+            </div>
+          )}
+
+          {/* MINUTEUR POMODORO & SONS D'AMBIANCE DEEP WORK */}
+          <PomodoroFlowTimer
+            initialDurationMinutes={block.durationMinutes || 25}
+            pillarColor={domainConfig.color}
+            pillarName={domainConfig.name}
+            blockTitle={block.title}
+          />
+
+          {/* 2. SOUS-CHECKLIST INTERACTIVE AVEC % */}
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5" style={{ color: domainConfig.color }} />
+                <h2 className="text-base font-bold text-[var(--text-primary)]">
+                  Étapes du Projet / Checklist
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                {totalItems === 0 && showAddSubtasksInZen && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddSubtasksInZen(false)}
+                    className="text-xs text-[var(--text-muted)] hover:text-[#6C5CE7] transition"
+                  >
+                    Retour Mode Zen
+                  </button>
+                )}
+                <div
+                  className="px-3 py-1 rounded-full text-xs font-bold border font-mono"
+                  style={{
+                    backgroundColor: `${domainConfig.color}15`,
+                    borderColor: `${domainConfig.color}35`,
+                    color: domainConfig.color,
+                  }}
+                >
+                  {completedItems}/{totalItems} ({progressPercent}%)
+                </div>
+              </div>
+            </div>
+
+            {/* Animated Progress Bar */}
+            <div className="space-y-1.5">
+              <div className="w-full h-2 bg-[var(--bg-surface-elevated)] rounded-full overflow-hidden border border-[var(--border-card)]">
+                <div
+                  className="h-full rounded-full transition-all duration-500 ease-out"
+                  style={{
+                    width: `${progressPercent}%`,
+                    backgroundColor: domainConfig.color,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Checklist Items list */}
+            <div className="space-y-2 pt-1">
+              {currentSubtasks.length === 0 ? (
+                <p className="text-xs text-[var(--text-secondary)] italic py-2">
+                  Aucune étape dans cette feuille de route. Ajoutez-en une ci-dessous ou basculez en Mode Zen.
+                </p>
+              ) : (
+                currentSubtasks.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`group flex items-start justify-between gap-3 p-3 rounded-2xl border transition-all ${
+                      item.completed
+                        ? 'bg-[var(--bg-surface-elevated)]/60 border-[var(--border-card)] opacity-70'
+                        : 'bg-[var(--bg-surface-elevated)] border-[var(--border-card)] hover:border-[var(--border-highlight)]'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTask(item.id)}
+                      className="flex items-start gap-3 text-left flex-1"
+                    >
+                      <div className="mt-0.5 shrink-0">
+                        <div
+                          className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
+                            item.completed
+                              ? 'shadow-sm'
+                              : 'border-[var(--border-card)] hover:border-[var(--text-secondary)] bg-transparent'
+                          }`}
+                          style={{
+                            backgroundColor: item.completed ? domainConfig.color : 'transparent',
+                            borderColor: item.completed ? domainConfig.color : undefined,
+                          }}
+                        >
+                          {item.completed && (
+                            <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
+                          )}
+                        </div>
+                      </div>
+                      <span
+                        className={`text-sm leading-snug transition-all ${
+                          item.completed
+                            ? 'line-through text-[var(--text-muted)]'
+                            : 'text-[var(--text-primary)] font-medium'
+                        }`}
+                      >
+                        {item.text}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTask(item.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-[var(--text-muted)] hover:text-[#FF7675] rounded-lg transition-opacity"
+                      title="Supprimer cette étape"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Add Item form */}
+            <form onSubmit={handleAddTask} className="flex items-center gap-2 pt-2">
+              <input
+                type="text"
+                placeholder="Ajouter une action concrète..."
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                className="flex-1 bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7]"
+              />
+              <button
+                type="submit"
+                disabled={!newTaskTitle.trim()}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 text-white shadow-sm"
+                style={{
+                  backgroundColor: domainConfig.color,
+                }}
+              >
+                <Plus className="w-4 h-4" />
+                <span>Ajouter</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. ZONE DE NOTES ENRICHIE MARKDOWN (Auto-save Firestore) */}
+      <MarkdownNotesEditor
+        value={block.notes || ''}
+        onChange={handleNotesChange}
+        accentColor={domainConfig.color}
+        title="Zone de Notes, Terminal & Synthèse"
+        placeholder="Consignez vos commandes de terminal (nmap, bash), liens web, réflexions et listes à puces en Markdown..."
+      />
     </div>
   );
 };
