@@ -16,6 +16,7 @@ import {
   Sparkles,
   Layers,
   Zap,
+  Compass,
 } from 'lucide-react';
 
 interface AddBlockModalProps {
@@ -78,23 +79,14 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
   categories,
 }) => {
   const activeCategories: DomainConfig[] = useMemo(() => {
-    if (Array.isArray(categories) && categories.length > 0) return categories;
-    return Object.values(DOMAINS).map((d) => ({
-      id: d.id,
-      name: d.name,
-      label: d.label,
-      color: d.color,
-      colorSecondary: d.colorSecondary,
-      bgRgba: d.bgRgba,
-      borderRgba: d.borderRgba,
-      iconName: d.id === 'tech' ? 'Terminal' : d.id === 'art' ? 'Flame' : 'Compass',
-    }));
+    if (Array.isArray(categories)) return categories;
+    return [];
   }, [categories]);
 
   // Form State
   const [title, setTitle] = useState(initialBlock?.title || initialTitle || '');
   const [domain, setDomain] = useState<string>(() => {
-    return initialPillarId || initialBlock?.domain || activeCategories[0]?.id || 'tech';
+    return initialPillarId || initialBlock?.domain || activeCategories[0]?.id || 'unassigned';
   });
   const [selectedProjectId, setSelectedProjectId] = useState<string>(
     initialBlock?.projectId || initialProjectId || ''
@@ -539,6 +531,19 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
                   </button>
                 );
               })}
+
+              <button
+                type="button"
+                onClick={() => setDomain('unassigned')}
+                className={`py-2 px-3 rounded-2xl text-xs font-semibold border transition-all text-center flex items-center justify-center gap-2 cursor-pointer ${
+                  domain === 'unassigned' || !domain
+                    ? 'bg-slate-700 text-white border-slate-500 shadow-md'
+                    : 'border-[var(--border-card)] text-[var(--text-secondary)] bg-[var(--bg-surface-elevated)] hover:border-[var(--border-highlight)]'
+                }`}
+              >
+                <Compass className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                <span className="truncate">Sans pilier (Libre)</span>
+              </button>
             </div>
           </div>
 

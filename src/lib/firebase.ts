@@ -536,3 +536,35 @@ export async function seedUserDefaultCategories(
   }
 }
 
+/**
+ * Enregistre par lot les catégories 100% personnalisées définies par l'utilisateur
+ */
+export async function saveUserCategoriesBatch(
+  userId: string,
+  categories: DomainConfig[]
+): Promise<void> {
+  const batch = writeBatch(db);
+  const path = getUserCategoriesPath(userId);
+
+  categories.forEach((cat, index) => {
+    const ref = doc(db, path, cat.id);
+    batch.set(ref, {
+      id: cat.id,
+      name: cat.name,
+      label: cat.label || '',
+      color: cat.color || '#6C5CE7',
+      colorSecondary: cat.colorSecondary || '',
+      iconName: cat.iconName || 'Sparkles',
+      description: cat.description || '',
+      order: cat.order ?? index,
+      createdAt: cat.createdAt || new Date().toISOString(),
+    });
+  });
+
+  try {
+    await batch.commit();
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+

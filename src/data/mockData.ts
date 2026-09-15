@@ -192,6 +192,11 @@ export const INITIAL_PROJECTS: Project[] = [
     bentoSize: 'large',
     targetCompletionDate: '2026-10-15',
     tags: ['Flutter', 'Firestore', 'Material 3', 'Provider'],
+    notes: 'Architecture basée sur StateNotifier / ChangeNotifier.\nNe pas oublier d\'optimiser la boucle d\'animation du Ruban de Möbius pour maintenir 60fps sur mobile.',
+    quickNotes: [
+      { id: 'qn-1', text: 'Vérifier la compatibilité du composant Canvas sur web', createdAt: '12 sept.' },
+      { id: 'qn-2', text: 'Tester le mode sombre à fort contraste pour l\'accessibilité', createdAt: '14 sept.' }
+    ],
     milestones: [
       { id: 'm1-1', title: 'Spécification de l\'architecture des models & converters', completed: true },
       { id: 'm1-2', title: 'Animation CustomPainter néon Ruban de Möbius', completed: true },

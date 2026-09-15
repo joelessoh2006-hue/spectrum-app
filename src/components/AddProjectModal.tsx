@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { DomainId, Project, DomainConfig } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { getPillarIcon } from '../utils/iconMap';
-import { X, Plus, Target, Tag, Trash2, CheckCircle2, Circle } from 'lucide-react';
+import { X, Plus, Target, Tag, Trash2, CheckCircle2, Circle, Compass, FileText } from 'lucide-react';
 
 interface AddProjectModalProps {
   isOpen: boolean;
@@ -39,6 +39,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
   const [title, setTitle] = useState('');
   const [domain, setDomain] = useState<string>(activeCategories[0]?.id || 'tech');
   const [description, setDescription] = useState('');
+  const [initialNotes, setInitialNotes] = useState('');
   const [bentoSize, setBentoSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [tagsInput, setTagsInput] = useState('');
   const [milestonesList, setMilestonesList] = useState<DraftMilestone[]>([
@@ -108,10 +109,12 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
       bentoSize,
       tags: tags.length ? tags : ['Multipotentiel', 'Sprint'],
       milestones,
+      notes: initialNotes.trim() || undefined,
     });
 
     setTitle('');
     setDescription('');
+    setInitialNotes('');
     setTagsInput('');
     setMilestonesList([
       { title: 'Cadrage initial du projet', completed: false },
@@ -159,7 +162,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
                     key={cat.id}
                     type="button"
                     onClick={() => setDomain(cat.id)}
-                    className={`py-2 px-3 rounded-2xl text-xs font-semibold border transition-all flex items-center justify-center gap-2 ${
+                    className={`py-2 px-3 rounded-2xl text-xs font-semibold border transition-all flex items-center justify-center gap-2 cursor-pointer ${
                       isSelected
                         ? 'text-white shadow-sm'
                         : 'border-[var(--border-card)] text-[var(--text-secondary)] bg-[var(--bg-surface-elevated)] hover:border-[var(--border-highlight)]'
@@ -174,7 +177,30 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
                   </button>
                 );
               })}
+
+              {/* Option Sans pilier / Projet Libre */}
+              <button
+                type="button"
+                onClick={() => setDomain('unassigned')}
+                className={`py-2 px-3 rounded-2xl text-xs font-semibold border transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  domain === 'unassigned'
+                    ? 'bg-slate-700/80 border-slate-400 text-white shadow-sm'
+                    : 'border-[var(--border-card)] text-[var(--text-secondary)] bg-[var(--bg-surface-elevated)] hover:border-[var(--border-highlight)]'
+                }`}
+              >
+                <Compass className={`w-3.5 h-3.5 shrink-0 ${domain === 'unassigned' ? 'text-amber-300' : 'text-slate-400'}`} />
+                <span className="truncate">Sans pilier (Libre)</span>
+              </button>
             </div>
+
+            {domain === 'unassigned' && (
+              <div className="mt-2 p-2.5 rounded-xl bg-slate-500/10 border border-slate-400/30 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                <Compass className="w-4 h-4 text-slate-400 shrink-0" />
+                <span>
+                  <strong>Projet Libre :</strong> Ce projet sera visible dans votre Bento sans impacter les quotas ni la répartition de vos piliers de vie.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Title */}
@@ -203,6 +229,21 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7]"
+            />
+          </div>
+
+          {/* Notes & Réflexions initiales (optionnel) */}
+          <div>
+            <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-[#6C5CE7]" />
+              <span>Notes &amp; Ressources initiales (optionnel)</span>
+            </label>
+            <textarea
+              rows={2}
+              placeholder="Liens utiles, réflexions, idées à explorer pour ce projet..."
+              value={initialNotes}
+              onChange={(e) => setInitialNotes(e.target.value)}
+              className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl px-4 py-2.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7]"
             />
           </div>
 

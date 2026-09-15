@@ -44,8 +44,31 @@ export const CategoriesExplorationGrid: React.FC<CategoriesExplorationGridProps>
       </div>
 
       {/* Grid of Luma Category Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {categories.map((cat, index) => {
+      {categories.length === 0 ? (
+        <div className="p-6 rounded-2xl bg-[var(--bg-surface)] border border-dashed border-[var(--border-card)] text-center space-y-3">
+          <div className="w-10 h-10 rounded-2xl bg-[#6C5CE7]/15 text-[#6C5CE7] mx-auto flex items-center justify-center">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-[var(--text-primary)]">
+              Aucun pilier configuré
+            </h4>
+            <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto mt-1">
+              Personnalisez 100% de vos piliers de vie sans contrainte imposée.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenManagePillars}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#6C5CE7] text-white text-xs font-bold hover:bg-[#5b4bc4] transition active:scale-95 cursor-pointer shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Définir mes piliers</span>
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {categories.map((cat, index) => {
           const Icon = getPillarIcon(cat.iconName);
           const pillarBlocks = blocks.filter((b) => b.domain === cat.id);
           const pillarProjects = projects.filter((p) => p.domain === cat.id);
@@ -133,7 +156,8 @@ export const CategoriesExplorationGrid: React.FC<CategoriesExplorationGridProps>
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

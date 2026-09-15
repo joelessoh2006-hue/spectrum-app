@@ -75,6 +75,12 @@ export interface ProjectMilestone {
   completed: boolean;
 }
 
+export interface ProjectQuickNote {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface Project {
   id: string;
   title: string;
@@ -84,6 +90,8 @@ export interface Project {
   status: 'in_progress' | 'ideation' | 'paused' | 'completed' | 'archived';
   bentoSize: 'small' | 'medium' | 'large'; // for bento layout
   milestones: ProjectMilestone[];
+  notes?: string; // Carnet / notes libres
+  quickNotes?: ProjectQuickNote[]; // Mémos courts datés
   targetCompletionDate?: string;
   tags: string[];
   archived?: boolean;

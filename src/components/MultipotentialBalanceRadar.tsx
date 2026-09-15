@@ -287,8 +287,22 @@ export const MultipotentialBalanceRadar: React.FC<MultipotentialBalanceRadarProp
 
       {isExpanded && (
         <div className="pt-4 space-y-6 animate-fadeIn">
-          {/* Top KPI row: Score d'Harmonie & Diagnostic */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {categories.length === 0 ? (
+            <div className="p-6 rounded-2xl bg-[var(--bg-surface-elevated)] border border-dashed border-[var(--border-card)] text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-[#6C5CE7]/15 text-[#6C5CE7] mx-auto flex items-center justify-center">
+                <Compass className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                Radar en attente de vos piliers personnalisés
+              </h3>
+              <p className="text-xs text-[var(--text-secondary)] max-w-md mx-auto leading-relaxed">
+                Spectrum n'impose aucun pilier par défaut. Dès que vous créez vos premiers piliers sur-mesure, ce radar mesurera automatiquement la répartition de votre temps et votre équilibre d'énergie.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Top KPI row: Score d'Harmonie & Diagnostic */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* 1. Score d'Harmonie */}
             <div className="bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl p-4 flex items-center justify-between">
               <div>
@@ -625,6 +639,8 @@ export const MultipotentialBalanceRadar: React.FC<MultipotentialBalanceRadarProp
               })}
             </div>
           </div>
+          </>
+          )}
         </div>
       )}
     </div>

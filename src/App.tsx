@@ -16,6 +16,7 @@ import {
   deleteUserProject,
   saveUserCategory,
   deleteUserCategory,
+  saveUserCategoriesBatch,
   seedUserDefaultCategories,
   seedUserTemplates,
   clearUserTimeBlocks,
@@ -32,6 +33,7 @@ import { FlutterCodeViewer } from './components/FlutterCodeViewer';
 import { AddBlockModal } from './components/AddBlockModal';
 import { AddProjectModal } from './components/AddProjectModal';
 import { ManagePillarsModal } from './components/ManagePillarsModal';
+import { InitialPillarsSetupModal } from './components/InitialPillarsSetupModal';
 import { InstantSessionModal } from './components/InstantSessionModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import {
@@ -69,18 +71,16 @@ export default function App() {
   // Data State
   const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [categories, setCategories] = useState<DomainConfig[]>(() =>
-    Object.values(DOMAINS).map((d) => ({
-      id: d.id,
-      name: d.name,
-      label: d.label,
-      color: d.color,
-      colorSecondary: d.colorSecondary,
-      bgRgba: d.bgRgba,
-      borderRgba: d.borderRgba,
-      iconName: d.id === 'tech' ? 'Terminal' : d.id === 'art' ? 'Flame' : 'Compass',
-    }))
-  );
+  const [categories, setCategories] = useState<DomainConfig[]>(() => {
+    try {
+      const cached = localStorage.getItem('spectrum_custom_categories');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
   const [firestoreStatus, setFirestoreStatus] = useState<'connected' | 'error' | 'syncing'>('connected');
 
   // Modals
@@ -95,6 +95,7 @@ export default function App() {
   } | null>(null);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
   const [isManagePillarsOpen, setIsManagePillarsOpen] = useState(false);
+  const [isInitialPillarsSetupOpen, setIsInitialPillarsSetupOpen] = useState(false);
   const [isInstantSessionModalOpen, setIsInstantSessionModalOpen] = useState(false);
   const [autoOpenImmersion, setAutoOpenImmersion] = useState(false);
 
@@ -177,16 +178,14 @@ export default function App() {
         }
       );
 
-      // Piliers dynamiques / Categories
+      // Piliers dynamiques / Categories (100% personnalisables dès la création de compte)
       unsubscribeCategories = subscribeToUserCategories(
         user.uid,
-        async (remoteCategories) => {
+        (remoteCategories) => {
           if (remoteCategories.length === 0) {
-            try {
-              await seedUserDefaultCategories(user.uid);
-            } catch (seedErr) {
-              console.warn('Erreur initialisation catégories utilisateur:', seedErr);
-            }
+            // Aucun pilier pré-établi d'office pour les nouveaux comptes
+            setCategories([]);
+            setIsInitialPillarsSetupOpen(true);
           } else {
             setCategories(remoteCategories);
           }
@@ -559,6 +558,80 @@ export default function App() {
     }
   };
 
+  const handleSaveProjectNotes = async (projectId: string, notes: string) => {
+    const targetProject = projects.find((p) => p.id === projectId);
+    if (!targetProject) return;
+
+    const updatedProject: Project = {
+      ...targetProject,
+      notes,
+    };
+
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? updatedProject : p)));
+
+    if (user) {
+      try {
+        await saveUserProject(user.uid, updatedProject);
+      } catch (err) {
+        console.error('Erreur sauvegarde notes projet Firestore:', err);
+      }
+    }
+  };
+
+  const handleAddProjectQuickNote = async (projectId: string, noteText: string) => {
+    const trimmed = noteText.trim();
+    if (!trimmed) return;
+
+    const targetProject = projects.find((p) => p.id === projectId);
+    if (!targetProject) return;
+
+    const newNote = {
+      id: `qn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      text: trimmed,
+      createdAt: new Date().toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    };
+
+    const updatedProject: Project = {
+      ...targetProject,
+      quickNotes: [newNote, ...(targetProject.quickNotes || [])],
+    };
+
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? updatedProject : p)));
+
+    if (user) {
+      try {
+        await saveUserProject(user.uid, updatedProject);
+      } catch (err) {
+        console.error('Erreur ajout flash note Firestore:', err);
+      }
+    }
+  };
+
+  const handleDeleteProjectQuickNote = async (projectId: string, noteId: string) => {
+    const targetProject = projects.find((p) => p.id === projectId);
+    if (!targetProject) return;
+
+    const updatedProject: Project = {
+      ...targetProject,
+      quickNotes: (targetProject.quickNotes || []).filter((qn) => qn.id !== noteId),
+    };
+
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? updatedProject : p)));
+
+    if (user) {
+      try {
+        await saveUserProject(user.uid, updatedProject);
+      } catch (err) {
+        console.error('Erreur suppression flash note Firestore:', err);
+      }
+    }
+  };
+
   const handleDeleteProject = async (projectId: string) => {
     setProjects((prev) => prev.filter((p) => p.id !== projectId));
 
@@ -625,16 +698,21 @@ export default function App() {
     }
   };
 
-  // Dynamic Pillars / Categories CRUD
+  // Dynamic Pillars / Categories CRUD (100% personnalisables)
   const handleSaveCategory = async (cat: DomainConfig) => {
     setCategories((prev) => {
       const idx = prev.findIndex((c) => c.id === cat.id);
+      let updated: DomainConfig[];
       if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = cat;
-        return copy;
+        updated = [...prev];
+        updated[idx] = cat;
+      } else {
+        updated = [...prev, cat];
       }
-      return [...prev, cat];
+      try {
+        localStorage.setItem('spectrum_custom_categories', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
     });
 
     if (user) {
@@ -647,13 +725,38 @@ export default function App() {
   };
 
   const handleDeleteCategory = async (catId: string) => {
-    setCategories((prev) => prev.filter((c) => c.id !== catId));
+    setCategories((prev) => {
+      const updated = prev.filter((c) => c.id !== catId);
+      try {
+        localStorage.setItem('spectrum_custom_categories', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
 
     if (user) {
       try {
         await deleteUserCategory(user.uid, catId);
       } catch (err) {
         console.error('Erreur suppression pilier Firestore:', err);
+      }
+    }
+  };
+
+  const handleSaveInitialPillars = async (newPillars: DomainConfig[]) => {
+    setCategories(newPillars);
+    try {
+      localStorage.setItem('spectrum_custom_categories', JSON.stringify(newPillars));
+    } catch (_) {}
+
+    if (user) {
+      setFirestoreStatus('syncing');
+      try {
+        await saveUserCategoriesBatch(user.uid, newPillars);
+        setFirestoreStatus('connected');
+      } catch (err) {
+        console.error('Erreur sauvegarde par lot des piliers:', err);
+        setFirestoreStatus('error');
+        throw err;
       }
     }
   };
@@ -901,6 +1004,9 @@ export default function App() {
             onDeleteProject={handleDeleteProject}
             onArchiveProject={handleArchiveProject}
             onUnarchiveProject={handleUnarchiveProject}
+            onSaveProjectNotes={handleSaveProjectNotes}
+            onAddProjectQuickNote={handleAddProjectQuickNote}
+            onDeleteProjectQuickNote={handleDeleteProjectQuickNote}
             onSeedProjects={handleSeedTemplates}
             categories={categories}
             onOpenManagePillars={() => setIsManagePillarsOpen(true)}
@@ -999,6 +1105,15 @@ export default function App() {
         onClose={() => setIsInstantSessionModalOpen(false)}
         categories={categories}
         onConfirm={handleStartInstantSession}
+      />
+
+      {/* 13. Modal d'Accueil & Configuration 100% Personnalisée des Piliers pour les Nouveaux Comptes */}
+      <InitialPillarsSetupModal
+        isOpen={isInitialPillarsSetupOpen}
+        onClose={() => setIsInitialPillarsSetupOpen(false)}
+        onSavePillars={handleSaveInitialPillars}
+        initialCategories={categories}
+        userEmail={user?.displayName || user?.email}
       />
     </div>
   );

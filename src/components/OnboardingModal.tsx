@@ -42,13 +42,13 @@ const SLIDES = [
     badge: 'Organisation Macro',
     badgeColor: 'text-[#00CEC9] bg-[#00CEC9]/10 border-[#00CEC9]/30',
     title: 'La méthode Bento Grid',
-    subtitle: 'Compartimentez vos projets par domaine d’énergie.',
+    subtitle: 'Compartimentez vos projets selon vos propres piliers de vie.',
     description:
-      'Inspirée des boîtes Bento japonaises équilibrées, la grille Bento vous permet de cartographier vos projets en cours (Tech, Art, Curiosité) avec leurs jalons clés, sans jamais saturer votre mémoire de travail.',
+      'Inspirée des boîtes Bento japonaises équilibrées, la grille Bento vous permet de cartographier vos projets selon vos piliers 100% personnalisés (ou en projets libres), avec leurs jalons et leurs notes intégrées.',
     icon: LayoutGrid,
     gradient: 'from-[#00CEC9] to-[#55E6C1]',
     highlights: [
-      { icon: Layers, label: '3 Domaines clés', desc: 'Technique, Artistique & Curiosité / Personnel.' },
+      { icon: Layers, label: 'Piliers sur-mesure', desc: 'Aucun domaine imposé : définissez librement vos axes de vie.' },
       { icon: CheckCircle, label: 'Jalons atomiques', desc: 'Validez vos victoires étapes par étapes.' },
     ],
   },

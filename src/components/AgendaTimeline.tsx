@@ -213,19 +213,9 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   });
 
   // Active categories list
-  const activeCategories: DomainConfig[] =
-    categories && categories.length > 0
-      ? categories
-      : Object.values(DOMAINS).map((d) => ({
-          id: d.id,
-          name: d.name,
-          label: d.label,
-          color: d.color,
-          colorSecondary: d.colorSecondary,
-          bgRgba: d.bgRgba,
-          borderRgba: d.borderRgba,
-          iconName: d.id === 'tech' ? 'Terminal' : d.id === 'art' ? 'Flame' : 'Compass',
-        }));
+  const activeCategories: DomainConfig[] = Array.isArray(categories)
+    ? categories
+    : [];
 
   // Group blocks by category
   const categorizedBlocks: Record<string, TimeBlock[]> = {};

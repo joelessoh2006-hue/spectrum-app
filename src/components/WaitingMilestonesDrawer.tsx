@@ -119,6 +119,15 @@ export const WaitingMilestonesDrawer: React.FC<WaitingMilestonesDrawerProps> = (
 
   // Trouver la configuration du pilier
   const getCategory = (domainId: string): DomainConfig => {
+    if (domainId === 'unassigned' || domainId === 'none' || !domainId) {
+      return {
+        id: 'unassigned',
+        name: 'Sans pilier',
+        label: 'Libre',
+        color: '#94A3B8',
+        iconName: 'Compass',
+      };
+    }
     const found = categories.find((c) => c.id === domainId);
     if (found) return found;
     return {

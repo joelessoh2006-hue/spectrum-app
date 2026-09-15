@@ -23,8 +23,12 @@ import {
   Archive,
   RotateCcw,
   Award,
+  Compass,
+  FileText,
+  StickyNote,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { ProjectNotesModal } from './ProjectNotesModal';
 
 interface ProjectsDashboardProps {
   projects: Project[];
@@ -39,6 +43,9 @@ interface ProjectsDashboardProps {
   onDeleteProject?: (projectId: string) => void;
   onArchiveProject?: (projectId: string) => void;
   onUnarchiveProject?: (projectId: string) => void;
+  onSaveProjectNotes?: (projectId: string, notes: string) => void;
+  onAddProjectQuickNote?: (projectId: string, noteText: string) => void;
+  onDeleteProjectQuickNote?: (projectId: string, noteId: string) => void;
   onSeedProjects?: () => void;
   categories?: DomainConfig[];
   onOpenManagePillars?: () => void;
@@ -57,6 +64,9 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
   onDeleteProject,
   onArchiveProject,
   onUnarchiveProject,
+  onSaveProjectNotes,
+  onAddProjectQuickNote,
+  onDeleteProjectQuickNote,
   onSeedProjects,
   categories,
   onOpenManagePillars,
@@ -66,6 +76,8 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
   const [viewTab, setViewTab] = useState<'projects' | 'trophies' | 'blocks'>('projects');
   const [newMilestoneInputs, setNewMilestoneInputs] = useState<Record<string, string>>({});
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
+  const [selectedProjectForNotes, setSelectedProjectForNotes] = useState<Project | null>(null);
+  const [activeCardTab, setActiveCardTab] = useState<Record<string, 'milestones' | 'notes'>>({});
 
   // Séparation projets actifs sur le Bento vs Galerie des Trophées archivés
   const activeProjects = projects.filter((p) => !p.archived);
@@ -121,19 +133,9 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
     }
   };
 
-  const activeCategories: DomainConfig[] =
-    categories && categories.length > 0
-      ? categories
-      : Object.values(DOMAINS).map((d) => ({
-          id: d.id,
-          name: d.name,
-          label: d.label,
-          color: d.color,
-          colorSecondary: d.colorSecondary,
-          bgRgba: d.bgRgba,
-          borderRgba: d.borderRgba,
-          iconName: d.id === 'tech' ? 'Terminal' : d.id === 'art' ? 'Flame' : 'Compass',
-        }));
+  const activeCategories: DomainConfig[] = Array.isArray(categories)
+    ? categories
+    : [];
 
   // Distribution multipotentielle des projets actifs sur le Bento
   const totalActiveProjects = activeProjects.length;
@@ -141,6 +143,9 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
   activeCategories.forEach((c) => {
     countsByCategory[c.id] = activeProjects.filter((p) => p.domain === c.id).length;
   });
+  const unassignedActiveCount = activeProjects.filter(
+    (p) => p.domain === 'unassigned' || p.domain === 'none' || !p.domain
+  ).length;
 
   // Statistiques de la Galerie des Trophées
   const totalArchivedMilestones = archivedProjects.reduce(
@@ -151,8 +156,14 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
   activeCategories.forEach((c) => {
     countsByTrophyCategory[c.id] = archivedProjects.filter((p) => p.domain === c.id).length;
   });
+  const unassignedTrophyCount = archivedProjects.filter(
+    (p) => p.domain === 'unassigned' || p.domain === 'none' || !p.domain
+  ).length;
 
   const getDomainConfig = (domainId: string): { name: string; color: string; iconName?: string } => {
+    if (domainId === 'unassigned' || domainId === 'none' || !domainId) {
+      return { name: 'Sans pilier', color: '#94A3B8', iconName: 'Compass' };
+    }
     const found = activeCategories.find((c) => c.id === domainId);
     if (found) return { name: found.name, color: found.color, iconName: found.iconName };
     const legacy = (DOMAINS as Record<string, DomainConfig>)[domainId];
@@ -160,13 +171,21 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
     return { name: domainId, color: '#6C5CE7' };
   };
 
-  const filteredProjects = activeProjects.filter((p) =>
-    pillarFilter === 'all' ? true : p.domain === pillarFilter
-  );
+  const filteredProjects = activeProjects.filter((p) => {
+    if (pillarFilter === 'all') return true;
+    if (pillarFilter === 'unassigned') {
+      return p.domain === 'unassigned' || p.domain === 'none' || !p.domain;
+    }
+    return p.domain === pillarFilter;
+  });
 
-  const filteredTrophies = archivedProjects.filter((p) =>
-    trophyFilter === 'all' ? true : p.domain === trophyFilter
-  );
+  const filteredTrophies = archivedProjects.filter((p) => {
+    if (trophyFilter === 'all') return true;
+    if (trophyFilter === 'unassigned') {
+      return p.domain === 'unassigned' || p.domain === 'none' || !p.domain;
+    }
+    return p.domain === trophyFilter;
+  });
 
   return (
     <div className="pb-24 max-w-5xl mx-auto px-4 pt-4 text-[var(--text-primary)] font-['Plus_Jakarta_Sans',sans-serif]">
@@ -310,6 +329,16 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                     />
                   );
                 })}
+                {unassignedActiveCount > 0 && (
+                  <div
+                    style={{
+                      width: `${Math.round((unassignedActiveCount / totalActiveProjects) * 100)}%`,
+                      backgroundColor: '#94A3B8',
+                    }}
+                    className="h-full transition-all duration-500"
+                    title={`Sans pilier: ${Math.round((unassignedActiveCount / totalActiveProjects) * 100)}%`}
+                  />
+                )}
               </div>
 
               {/* Legend */}
@@ -333,6 +362,20 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                     </div>
                   );
                 })}
+
+                {unassignedActiveCount > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2.5 h-2.5 rounded-full shrink-0 bg-slate-400"
+                    />
+                    <div className="text-xs">
+                      <span className="font-semibold text-[var(--text-primary)]">Sans pilier (Libre)</span>
+                      <span className="text-[var(--text-secondary)] font-mono ml-1.5">
+                        {Math.round((unassignedActiveCount / totalActiveProjects) * 100)}% ({unassignedActiveCount})
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -358,7 +401,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                 <button
                   key={cat.id}
                   onClick={() => setPillarFilter(cat.id)}
-                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer ${
                     isSelected
                       ? 'shadow-sm'
                       : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-card)] hover:bg-[var(--bg-surface-elevated)]'
@@ -379,6 +422,30 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                 </button>
               );
             })}
+
+            {unassignedActiveCount > 0 && (
+              <button
+                onClick={() => setPillarFilter('unassigned')}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer ${
+                  pillarFilter === 'unassigned'
+                    ? 'bg-slate-700/80 border-slate-400 text-white shadow-sm'
+                    : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-card)] hover:bg-[var(--bg-surface-elevated)]'
+                }`}
+              >
+                <Compass className="w-3.5 h-3.5 text-slate-400" />
+                <span>Sans pilier ({unassignedActiveCount})</span>
+              </button>
+            )}
+
+            {activeCategories.length === 0 && onOpenManagePillars && (
+              <button
+                onClick={onOpenManagePillars}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap bg-[#6C5CE7]/15 text-[#6C5CE7] border border-[#6C5CE7]/30 hover:bg-[#6C5CE7]/25 transition cursor-pointer"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>+ Définir mes piliers</span>
+              </button>
+            )}
           </div>
 
           {/* 2. BENTO GRID LAYOUT */}
@@ -446,6 +513,18 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                         </div>
 
                         <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedProjectForNotes(project)}
+                            className="p-1 text-[var(--text-muted)] hover:text-[#6C5CE7] hover:bg-[var(--bg-surface-elevated)] rounded-lg transition cursor-pointer relative"
+                            title="Ouvrir le carnet de notes & mémos du projet"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            {((project.notes && project.notes.trim().length > 0) ||
+                              (project.quickNotes && project.quickNotes.length > 0)) && (
+                              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#6C5CE7]" />
+                            )}
+                          </button>
                           <span className="text-xs font-mono font-bold text-[var(--text-primary)] px-2 py-0.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)]">
                             {project.progress}%
                           </span>
@@ -508,25 +587,75 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                         </div>
                       )}
 
-                      {/* Milestones & Tasks checklist */}
-                      <div className="mt-4 pt-3 border-t border-[var(--border-card)] space-y-2.5">
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center justify-between">
-                          <span className="flex items-center gap-1">
-                            <Target className="w-3.5 h-3.5 text-[#6C5CE7]" />
-                            Jalons &amp; Tâches
-                          </span>
-                          <span
-                            className="font-mono text-xs font-semibold"
-                            style={{
-                              color:
-                                completedMilestones === totalMilestones && totalMilestones > 0
-                                  ? '#55E6C1'
-                                  : undefined,
-                            }}
-                          >
-                            {completedMilestones}/{totalMilestones}
-                          </span>
+                      {/* Onglets de la carte : Jalons vs Notes */}
+                      <div className="mt-4 pt-3 border-t border-[var(--border-card)]">
+                        <div className="flex items-center justify-between gap-1 mb-2.5">
+                          <div className="flex items-center gap-1 p-0.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)]">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActiveCardTab((prev) => ({ ...prev, [project.id]: 'milestones' }))
+                              }
+                              className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                (activeCardTab[project.id] || 'milestones') === 'milestones'
+                                  ? 'bg-[#6C5CE7] text-white shadow-xs'
+                                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                              }`}
+                            >
+                              <Target className="w-3 h-3" />
+                              <span>Jalons</span>
+                              <span className="font-mono text-[10px] opacity-85">
+                                ({completedMilestones}/{totalMilestones})
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActiveCardTab((prev) => ({ ...prev, [project.id]: 'notes' }))
+                              }
+                              className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                activeCardTab[project.id] === 'notes'
+                                  ? 'bg-[#6C5CE7] text-white shadow-xs'
+                                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                              }`}
+                            >
+                              <FileText className="w-3 h-3" />
+                              <span>Notes</span>
+                              {((project.notes && project.notes.trim().length > 0) ||
+                                (project.quickNotes && project.quickNotes.length > 0)) && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                              )}
+                            </button>
+                          </div>
+
+                          {activeCardTab[project.id] === 'notes' ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedProjectForNotes(project)}
+                              className="text-[10px] font-bold text-[#6C5CE7] hover:underline flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>Ouvrir carnet</span>
+                              <ChevronDown className="w-3 h-3 -rotate-90" />
+                            </button>
+                          ) : (
+                            <span
+                              className="font-mono text-xs font-semibold"
+                              style={{
+                                color:
+                                  completedMilestones === totalMilestones && totalMilestones > 0
+                                    ? '#55E6C1'
+                                    : undefined,
+                              }}
+                            >
+                              {completedMilestones}/{totalMilestones}
+                            </span>
+                          )}
                         </div>
+
+                        {/* ONGLET 1 : JALONS */}
+                        {(activeCardTab[project.id] || 'milestones') === 'milestones' ? (
+                          <div className="space-y-2.5">
 
                         {/* List of milestones */}
                         {project.milestones.length > 0 ? (
@@ -660,6 +789,79 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                           </form>
                         )}
                       </div>
+                    ) : (
+                      /* CONTENU ONGLET 2 : NOTES & RÉFLEXIONS */
+                      <div className="space-y-2.5">
+                        {project.notes ? (
+                          <div
+                            onClick={() => setSelectedProjectForNotes(project)}
+                            className="p-2.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs text-[var(--text-secondary)] hover:border-[#6C5CE7] transition cursor-pointer group"
+                          >
+                            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                              <span className="flex items-center gap-1">
+                                <FileText className="w-3 h-3 text-[#6C5CE7]" />
+                                Carnet de bord
+                              </span>
+                              <span className="text-[#6C5CE7] opacity-0 group-hover:opacity-100 transition">
+                                Éditer
+                              </span>
+                            </div>
+                            <p className="line-clamp-3 leading-relaxed whitespace-pre-wrap text-[var(--text-primary)]">
+                              {project.notes}
+                            </p>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedProjectForNotes(project)}
+                            className="w-full p-3 rounded-xl border border-dashed border-[var(--border-card)] bg-[var(--bg-surface-elevated)]/50 hover:bg-[var(--bg-surface-elevated)] hover:border-[#6C5CE7] text-left transition cursor-pointer text-xs text-[var(--text-muted)] flex items-center gap-2"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-[#6C5CE7]" />
+                            <span>Rédiger une note ou coller des ressources...</span>
+                          </button>
+                        )}
+
+                        {/* Aperçu des mémos flash datés */}
+                        {project.quickNotes && project.quickNotes.length > 0 && (
+                          <div className="space-y-1 pt-1">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center justify-between">
+                              <span>Derniers mémos datés</span>
+                              <span className="font-mono text-[9px] text-[var(--text-muted)]">
+                                {project.quickNotes.length}
+                              </span>
+                            </div>
+                            <div className="space-y-1 max-h-24 overflow-y-auto">
+                              {project.quickNotes.slice(0, 3).map((qn) => (
+                                <div
+                                  key={qn.id}
+                                  className="p-1.5 rounded-lg bg-[var(--bg-surface-elevated)] text-[11px] text-[var(--text-primary)] border border-[var(--border-card)] flex items-center justify-between gap-1.5"
+                                >
+                                  <span className="truncate">{qn.text}</span>
+                                  <span className="text-[9px] font-mono text-[var(--text-muted)] shrink-0">
+                                    {qn.createdAt}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="pt-1 flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedProjectForNotes(project)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#6C5CE7]/10 hover:bg-[#6C5CE7]/20 text-[#6C5CE7] text-[11px] font-bold transition cursor-pointer"
+                          >
+                            <FileText className="w-3 h-3" />
+                            <span>
+                              Gérer le carnet (
+                              {(project.notes ? 1 : 0) + (project.quickNotes?.length || 0)})
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                       {/* Linked Time Blocks */}
                       {(() => {
@@ -865,6 +1067,21 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                   </button>
                 );
               })}
+
+              {unassignedTrophyCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setTrophyFilter('unassigned')}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer ${
+                    trophyFilter === 'unassigned'
+                      ? 'bg-slate-700/80 border-slate-400 text-white shadow-sm'
+                      : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-card)] hover:bg-[var(--bg-surface-elevated)]'
+                  }`}
+                >
+                  <Compass className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Sans pilier ({unassignedTrophyCount})</span>
+                </button>
+              )}
             </div>
           )}
 
@@ -925,6 +1142,14 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                         </div>
 
                         <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedProjectForNotes(project)}
+                            className="p-1 text-[var(--text-muted)] hover:text-amber-400 hover:bg-[var(--bg-surface-elevated)] rounded-lg transition cursor-pointer"
+                            title="Consulter le carnet de notes & apprentissages"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                          </button>
                           <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-amber-300 px-2.5 py-0.5 rounded-xl bg-amber-400/15 border border-amber-400/30">
                             <Trophy className="w-3 h-3 text-amber-400" />
                             100%
@@ -1137,6 +1362,22 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
             </div>
           )}
         </div>
+      )}
+
+      {/* MODAL CARNET DE BORD & NOTES DU PROJET */}
+      {selectedProjectForNotes && (
+        <ProjectNotesModal
+          isOpen={!!selectedProjectForNotes}
+          project={
+            projects.find((p) => p.id === selectedProjectForNotes.id) || selectedProjectForNotes
+          }
+          onClose={() => setSelectedProjectForNotes(null)}
+          onSaveNotes={(pId, notes) => onSaveProjectNotes?.(pId, notes)}
+          onAddQuickNote={(pId, noteText) => onAddProjectQuickNote?.(pId, noteText)}
+          onDeleteQuickNote={(pId, noteId) => onDeleteProjectQuickNote?.(pId, noteId)}
+          pillarName={getDomainConfig(selectedProjectForNotes.domain).name}
+          pillarColor={getDomainConfig(selectedProjectForNotes.domain).color}
+        />
       )}
     </div>
   );

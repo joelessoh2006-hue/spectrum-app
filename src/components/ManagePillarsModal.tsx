@@ -123,10 +123,6 @@ export const ManagePillarsModal: React.FC<ManagePillarsModalProps> = ({
   };
 
   const handleDelete = async (catId: string) => {
-    if (categories.length <= 1) {
-      setError('Vous devez conserver au moins un pilier d’activité.');
-      return;
-    }
     setIsSaving(true);
     try {
       await onDeleteCategory(catId);
@@ -384,7 +380,30 @@ export const ManagePillarsModal: React.FC<ManagePillarsModalProps> = ({
               </div>
 
               <div className="space-y-2.5">
-                {categories.map((cat) => {
+                {categories.length === 0 ? (
+                  <div className="p-6 rounded-2xl bg-[var(--bg-surface-elevated)] border border-dashed border-[var(--border-card)] text-center space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-[#6C5CE7]/15 text-[#6C5CE7] mx-auto flex items-center justify-center">
+                      <Layers className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-[var(--text-primary)]">
+                        Aucun pilier enregistré
+                      </h4>
+                      <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto mt-1 leading-relaxed">
+                        Créez vos piliers 100% sur-mesure dès maintenant pour structurer vos projets et blocs d’énergie.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={startCreate}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#6C5CE7] text-white text-xs font-bold hover:bg-[#5b4bc4] transition active:scale-95 cursor-pointer shadow-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Créer un pilier personnalisé</span>
+                    </button>
+                  </div>
+                ) : (
+                  categories.map((cat) => {
                   const Icon = getPillarIcon(cat.iconName);
                   const isConfirmingDelete = deleteConfirmId === cat.id;
 
@@ -450,21 +469,20 @@ export const ManagePillarsModal: React.FC<ManagePillarsModalProps> = ({
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
-                            {categories.length > 1 && (
-                              <button
-                                onClick={() => setDeleteConfirmId(cat.id)}
-                                className="p-2 rounded-xl text-[var(--text-secondary)] hover:text-red-500 hover:bg-red-500/10 transition"
-                                title="Supprimer ce pilier"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
+                            <button
+                              onClick={() => setDeleteConfirmId(cat.id)}
+                              className="p-2 rounded-xl text-[var(--text-secondary)] hover:text-red-500 hover:bg-red-500/10 transition"
+                              title="Supprimer ce pilier"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </>
                         )}
                       </div>
                     </div>
                   );
-                })}
+                })
+                )}
               </div>
             </div>
           )}
