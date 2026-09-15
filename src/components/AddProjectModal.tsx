@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { DomainId, Project, DomainConfig } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { getPillarIcon } from '../utils/iconMap';
-import { X, Plus, Target, Tag, Trash2, CheckCircle2, Circle, Compass, FileText } from 'lucide-react';
+import { X, Plus, Target, Tag, Trash2, CheckCircle2, Circle, Compass, FileText, ClipboardList } from 'lucide-react';
 
 interface AddProjectModalProps {
   isOpen: boolean;
@@ -47,6 +47,8 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
     { title: 'Sortie du premier prototype', completed: false },
   ]);
   const [newMilestoneText, setNewMilestoneText] = useState('');
+  const [isBulkPasteOpen, setIsBulkPasteOpen] = useState(false);
+  const [bulkPasteText, setBulkPasteText] = useState('');
 
   // Live preview of progress based on checked milestones
   const completedCount = milestonesList.filter((m) => m.completed).length;
@@ -70,6 +72,47 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
 
   const handleRemoveMilestoneItem = (index: number) => {
     setMilestonesList((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleParseBulkMilestones = (replaceExisting = false) => {
+    if (!bulkPasteText.trim()) return;
+    const lines = bulkPasteText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    const parsed: DraftMilestone[] = [];
+
+    for (const rawLine of lines) {
+      let clean = rawLine;
+      let completed = false;
+
+      // Detect [x], [X], [ x ], - [x], etc.
+      if (/^(-\s*)?\[\s*x\s*\]\s*/i.test(clean)) {
+        completed = true;
+        clean = clean.replace(/^(-\s*)?\[\s*x\s*\]\s*/i, '');
+      } else if (/^(-\s*)?\[\s*\]\s*/.test(clean)) {
+        completed = false;
+        clean = clean.replace(/^(-\s*)?\[\s*\]\s*/, '');
+      } else if (/^[-*•]\s+/.test(clean)) {
+        clean = clean.replace(/^[-*•]\s+/, '');
+      }
+
+      clean = clean.trim();
+      if (clean) {
+        parsed.push({ title: clean, completed });
+      }
+    }
+
+    if (parsed.length > 0) {
+      if (replaceExisting) {
+        setMilestonesList(parsed);
+      } else {
+        setMilestonesList((prev) => [...prev, ...parsed]);
+      }
+      setBulkPasteText('');
+      setIsBulkPasteOpen(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -128,7 +171,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-      <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-3xl w-full max-w-lg p-6 text-[var(--text-primary)] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-3xl w-full max-w-lg p-6 text-[var(--text-primary)] shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between pb-4 border-b border-[var(--border-card)]">
           <div className="flex items-center gap-2.5">
             <div
@@ -279,7 +322,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
 
           {/* Milestones / Tasks List with Checkboxes & Live Progress */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
                 <Target className="w-3.5 h-3.5 text-[#6C5CE7]" />
                 <span>Étapes clés &amp; Tâches initiales</span>
@@ -288,23 +331,81 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
                 </span>
               </label>
 
-              {/* Jauge et pourcentage en temps réel */}
-              <div className="flex items-center gap-2">
-                <div className="w-16 h-1.5 bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-[#6C5CE7] to-[#00CEC9] transition-all duration-300 rounded-full"
-                    style={{ width: `${calculatedProgress}%` }}
-                  />
-                </div>
-                <span
-                  className={`text-[11px] font-mono font-bold ${
-                    calculatedProgress > 0 ? 'text-[#00CEC9]' : 'text-[var(--text-muted)]'
-                  }`}
+              {/* Jauge et pourcentage en temps réel + Bouton Coller Liste */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkPasteOpen(!isBulkPasteOpen)}
+                  className="text-[11px] font-bold text-[#6C5CE7] hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  {calculatedProgress}%
-                </span>
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  <span>{isBulkPasteOpen ? 'Fermer import' : 'Coller une liste'}</span>
+                </button>
+
+                <div className="flex items-center gap-1.5">
+                  <div className="w-14 h-1.5 bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#6C5CE7] to-[#00CEC9] transition-all duration-300 rounded-full"
+                      style={{ width: `${calculatedProgress}%` }}
+                    />
+                  </div>
+                  <span
+                    className={`text-[11px] font-mono font-bold ${
+                      calculatedProgress > 0 ? 'text-[#00CEC9]' : 'text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {calculatedProgress}%
+                  </span>
+                </div>
               </div>
             </div>
+
+            {/* Zone d'import rapide / collage de cours & leçons */}
+            {isBulkPasteOpen && (
+              <div className="p-3 rounded-2xl bg-[var(--bg-surface-elevated)] border border-[#6C5CE7]/40 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                    <ClipboardList className="w-4 h-4 text-[#6C5CE7]" />
+                    <span>Coller votre plan de cours / leçons</span>
+                  </span>
+                  <span className="text-[10px] text-[var(--text-muted)]">
+                    Détecte auto <code className="text-[#00CEC9]">[x]</code> et <code className="text-[var(--text-secondary)]">[ ]</code>
+                  </span>
+                </div>
+
+                <textarea
+                  rows={6}
+                  value={bulkPasteText}
+                  onChange={(e) => setBulkPasteText(e.target.value)}
+                  placeholder={`Collez votre liste ici, ex :\n[x] Leçon 1 : Qu'est ce que la recherche + Exercice 1\n[x] Leçon 2 : Qu'est ce que la recherche scientifique\n[ ] Leçon 3 : Types de recherche...`}
+                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-xl p-3 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] font-mono leading-relaxed focus:outline-none focus:border-[#6C5CE7]"
+                />
+
+                <div className="flex items-center justify-between gap-2 flex-wrap pt-0.5">
+                  <span className="text-[11px] text-[var(--text-muted)]">
+                    {bulkPasteText.split('\n').filter((l) => l.trim()).length} ligne(s) détectée(s)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleParseBulkMilestones(false)}
+                      disabled={!bulkPasteText.trim()}
+                      className="px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-card)] text-xs font-semibold text-[var(--text-primary)] hover:border-[#6C5CE7] disabled:opacity-40 transition cursor-pointer"
+                    >
+                      + Ajouter à la suite
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleParseBulkMilestones(true)}
+                      disabled={!bulkPasteText.trim()}
+                      className="px-3.5 py-1.5 rounded-xl bg-[#6C5CE7] text-white text-xs font-bold hover:bg-[#5b4bc4] disabled:opacity-40 transition cursor-pointer shadow-sm"
+                    >
+                      Remplacer tout
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <p className="text-[11px] text-[var(--text-muted)]">
               💡 Cochez dès maintenant les tâches déjà accomplies hors agenda : elles alimenteront la progression du projet dès sa création.
