@@ -24,6 +24,8 @@ import {
   Minimize2,
   Flame,
   ListChecks,
+  Bell,
+  BellOff,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -118,6 +120,26 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
   const isZenMode = totalItems === 0;
   const [showAddSubtasksInZen, setShowAddSubtasksInZen] = useState(false);
   const [isImmersionOpen, setIsImmersionOpen] = useState(!!initialOpenImmersion);
+  const [isReminderMenuOpen, setIsReminderMenuOpen] = useState(false);
+
+  const handleToggleReminder = () => {
+    const next = block.reminderEnabled !== false ? false : true;
+    onUpdateBlock({
+      ...block,
+      reminderEnabled: next,
+    });
+    showSavedBadge();
+  };
+
+  const handleChangeReminderMinutes = (minutes: number) => {
+    onUpdateBlock({
+      ...block,
+      reminderEnabled: true,
+      reminderMinutesBefore: minutes,
+    });
+    setIsReminderMenuOpen(false);
+    showSavedBadge();
+  };
 
   useEffect(() => {
     if (initialOpenImmersion) {
@@ -320,7 +342,7 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
           <span>{domainConfig.name}</span>
         </div>
 
-        <div className="flex items-center gap-3 text-xs font-medium text-[var(--text-secondary)]">
+        <div className="flex items-center gap-2 sm:gap-3 text-xs font-medium text-[var(--text-secondary)] flex-wrap">
           <span className="inline-flex items-center gap-1">
             <Clock className="w-3.5 h-3.5 text-[var(--text-muted)]" />
             {block.startTime} — {block.endTime} ({block.durationMinutes} min)
@@ -331,6 +353,77 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
               Récurrent
             </span>
           )}
+
+          {/* Badge & Contrôle Rapide du Rappel */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsReminderMenuOpen((prev) => !prev)}
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl border text-xs font-semibold transition cursor-pointer ${
+                block.reminderEnabled !== false
+                  ? 'bg-[#6C5CE7]/10 border-[#6C5CE7]/30 text-[#6C5CE7] hover:bg-[#6C5CE7]/20'
+                  : 'bg-[var(--bg-surface)] border-[var(--border-card)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+              title="Configurer le rappel pour cette activité"
+            >
+              {block.reminderEnabled !== false ? (
+                <>
+                  <Bell className="w-3 h-3 text-[#6C5CE7]" />
+                  <span>
+                    Rappel : {block.reminderMinutesBefore === 0 ? "À l'heure pile" : `${block.reminderMinutesBefore ?? 5}m avant`}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <BellOff className="w-3 h-3" />
+                  <span>Rappel désactivé</span>
+                </>
+              )}
+            </button>
+
+            {isReminderMenuOpen && (
+              <div className="absolute left-0 mt-1.5 w-56 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-card)] shadow-xl p-2.5 z-30 space-y-1.5 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--border-card)] text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                  <span>Délai du rappel</span>
+                  <button
+                    type="button"
+                    onClick={handleToggleReminder}
+                    className="text-[#FF7675] hover:underline"
+                  >
+                    {block.reminderEnabled !== false ? 'Désactiver' : 'Activer'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-1">
+                  {[
+                    { min: 0, label: "À l'heure pile (0 min)" },
+                    { min: 5, label: '5 minutes avant' },
+                    { min: 10, label: '10 minutes avant' },
+                    { min: 15, label: '15 minutes avant' },
+                    { min: 30, label: '30 minutes avant' },
+                  ].map(({ min, label }) => {
+                    const isSelected =
+                      block.reminderEnabled !== false && (block.reminderMinutesBefore ?? 5) === min;
+                    return (
+                      <button
+                        key={min}
+                        type="button"
+                        onClick={() => handleChangeReminderMinutes(min)}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center justify-between ${
+                          isSelected
+                            ? 'bg-[#6C5CE7] text-white'
+                            : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
+                        }`}
+                      >
+                        <span>{label}</span>
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

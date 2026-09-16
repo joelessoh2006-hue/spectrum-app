@@ -50,6 +50,8 @@ export interface TimeBlock {
   isFixedConstraint?: boolean; // Vrai si événement importé (contrainte fixe/agenda externe)
   sourceCalendar?: string;     // Ex: "Calendrier Xiaomi", "Google Calendar", "Fichier .ics"
   location?: string;
+  reminderEnabled?: boolean;   // Active/désactive le rappel de notification pour cette activité
+  reminderMinutesBefore?: number; // 0 = à l'heure, 5 = 5 min avant, 10 = 10 min avant, 15 = 15 min avant, 30 = 30 min avant
 }
 
 export interface ImportedCalendarEvent {

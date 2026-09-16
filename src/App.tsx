@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { TimeBlock, Project, DomainConfig } from './types';
 import { INITIAL_TIME_BLOCKS, INITIAL_PROJECTS, DOMAINS } from './data/mockData';
@@ -36,6 +36,15 @@ import { ManagePillarsModal } from './components/ManagePillarsModal';
 import { InitialPillarsSetupModal } from './components/InitialPillarsSetupModal';
 import { InstantSessionModal } from './components/InstantSessionModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { NotificationAlertBanner } from './components/NotificationAlertBanner';
+import {
+  soundSynthesizer,
+  isSoundEnabled,
+  setSoundEnabled,
+  hasBeenNotified,
+  markAsNotified,
+  sendNativeNotification,
+} from './utils/notifications';
 import {
   Calendar,
   Layers,
@@ -240,6 +249,160 @@ export default function App() {
     } catch (err) {
       console.error('Logout error:', err);
     }
+  };
+
+  // Active in-app notification alert banner
+  const [activeAlert, setActiveAlert] = useState<{
+    block: TimeBlock;
+    minutesBefore: number;
+    isStartingNow: boolean;
+  } | null>(null);
+  const [isNotificationSoundOn, setIsNotificationSoundOn] = useState<boolean>(() => isSoundEnabled());
+
+  const handleToggleSound = () => {
+    const next = !isNotificationSoundOn;
+    setIsNotificationSoundOn(next);
+    setSoundEnabled(next);
+    if (next) {
+      soundSynthesizer.playChime();
+    }
+  };
+
+  // Date formatée du jour pour les rappels (YYYY-MM-DD)
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }, []);
+
+  // Blocs prévus pour aujourd'hui (incluant récurrences actives)
+  const todayBlocks = useMemo(() => {
+    const now = new Date();
+    const currentDayOfWeek = now.getDay() === 0 ? 7 : now.getDay();
+
+    return timeBlocks
+      .filter((b) => {
+        if (b.isRecurring) {
+          return Array.isArray(b.recurringDays) && b.recurringDays.includes(currentDayOfWeek);
+        }
+        return b.date === todayStr;
+      })
+      .sort((a, b) => a.startMinutes - b.startMinutes);
+  }, [timeBlocks, todayStr]);
+
+  // Surveillance proactive continue (toutes les 15 secondes)
+  useEffect(() => {
+    const checkUpcomingReminders = () => {
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+      todayBlocks.forEach((block) => {
+        // Ignorer si rappel explicitement désactivé ou déjà terminé
+        if (block.reminderEnabled === false || block.completed) return;
+
+        const reminderMinutes = block.reminderMinutesBefore ?? 5;
+        const triggerMinutes = block.startMinutes - reminderMinutes;
+
+        // Déclencher quand la minute actuelle correspond au seuil choisi
+        const isTriggerTime = currentMinutes === triggerMinutes;
+
+        if (isTriggerTime && !hasBeenNotified(block.id, todayStr, reminderMinutes)) {
+          markAsNotified(block.id, todayStr, reminderMinutes);
+
+          const isStartingNow = reminderMinutes === 0;
+          const alertData = {
+            block,
+            minutesBefore: reminderMinutes,
+            isStartingNow,
+          };
+
+          // 1. Toast / Bannière visuelle in-app
+          setActiveAlert(alertData);
+
+          // 2. Carillon sonore zen Web Audio
+          if (isSoundEnabled()) {
+            soundSynthesizer.playChime();
+          }
+
+          // 3. Notification native du navigateur (si accordée)
+          const notifTitle = isStartingNow
+            ? `C'est l'heure : ${block.title} !`
+            : `Rappel : ${block.title} dans ${reminderMinutes} min`;
+          const notifBody = `${block.startTime} — ${block.endTime} • ${block.globalObjective || 'Prêt pour votre session'}`;
+
+          sendNativeNotification(notifTitle, {
+            body: notifBody,
+            onClick: () => {
+              setSelectedBlockId(block.id);
+              setCurrentView('activity');
+            },
+          });
+        }
+      });
+    };
+
+    checkUpcomingReminders();
+    const interval = setInterval(checkUpcomingReminders, 15000);
+    return () => clearInterval(interval);
+  }, [todayBlocks, todayStr]);
+
+  const handleOpenBlockFromAlert = (blockId: string) => {
+    setSelectedBlockId(blockId);
+    setCurrentView('activity');
+    setActiveAlert(null);
+  };
+
+  const handleSnoozeAlert = (block: TimeBlock, snoozeMinutes: number) => {
+    setActiveAlert(null);
+    setTimeout(() => {
+      setActiveAlert({
+        block,
+        minutesBefore: 0,
+        isStartingNow: true,
+      });
+      if (isSoundEnabled()) {
+        soundSynthesizer.playChime();
+      }
+    }, snoozeMinutes * 60 * 1000);
+  };
+
+  const handleTriggerTestAlert = () => {
+    const sampleBlock: TimeBlock = todayBlocks[0] || {
+      id: 'test-block-sample',
+      title: 'Session Focus Multipotentiel',
+      domain: categories[0]?.id || 'tech',
+      startTime: '14:00',
+      endTime: '15:30',
+      startMinutes: 14 * 60,
+      durationMinutes: 90,
+      isRecurring: false,
+      recurringDays: [],
+      globalObjective: 'Tester les notifications, le carillon zen et la bannière interactive.',
+      notes: '',
+      subtasks: [],
+      reminderEnabled: true,
+      reminderMinutesBefore: 5,
+    };
+
+    setActiveAlert({
+      block: sampleBlock,
+      minutesBefore: 5,
+      isStartingNow: false,
+    });
+
+    if (isSoundEnabled()) {
+      soundSynthesizer.playChime();
+    }
+
+    sendNativeNotification('Spectrum • Alerte de test (5 min avant)', {
+      body: `${sampleBlock.title} débutera bientôt. Carillon sonore zen validé !`,
+      onClick: () => {
+        setSelectedBlockId(sampleBlock.id);
+        setCurrentView('activity');
+      },
+    });
   };
 
   // CRUD TimeBlocks
@@ -830,7 +993,20 @@ export default function App() {
         />
       )}
 
-      {/* 2. Top Header & Auth State */}
+      {/* 2. Notification In-App Toast Banner */}
+      {activeAlert && (
+        <NotificationAlertBanner
+          alert={activeAlert}
+          categories={categories}
+          onOpenBlock={handleOpenBlockFromAlert}
+          onDismiss={() => setActiveAlert(null)}
+          onSnooze={handleSnoozeAlert}
+          isSoundOn={isNotificationSoundOn}
+          onToggleSound={handleToggleSound}
+        />
+      )}
+
+      {/* 3. Top Header & Auth State */}
       <AuthHeader
         user={user}
         isAuthLoading={isAuthLoading}
@@ -841,6 +1017,10 @@ export default function App() {
         onOpenManagePillars={() => setIsManagePillarsOpen(true)}
         onOpenInstantSession={() => setIsInstantSessionModalOpen(true)}
         firestoreStatus={firestoreStatus}
+        todayBlocks={todayBlocks}
+        categories={categories}
+        onTriggerTestAlert={handleTriggerTestAlert}
+        onSelectBlock={handleOpenBlockFromAlert}
       />
 
       {/* 3. Message d'erreur d'authentification si popup bloqué */}

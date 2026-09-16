@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { DomainId, TimeBlock, Project, Subtask, DomainConfig } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { getPillarIcon } from '../utils/iconMap';
+import { getDefaultReminderMinutes } from '../utils/notifications';
 import {
   X,
   Plus,
@@ -17,6 +18,7 @@ import {
   Layers,
   Zap,
   Compass,
+  Bell,
 } from 'lucide-react';
 
 interface AddBlockModalProps {
@@ -126,6 +128,21 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
     return getFormattedDateString(d);
   });
 
+  // Notification & Reminder State
+  const [reminderEnabled, setReminderEnabled] = useState<boolean>(() => {
+    if (initialBlock?.reminderEnabled !== undefined) {
+      return initialBlock.reminderEnabled;
+    }
+    return true;
+  });
+
+  const [reminderMinutesBefore, setReminderMinutesBefore] = useState<number>(() => {
+    if (initialBlock?.reminderMinutesBefore !== undefined) {
+      return initialBlock.reminderMinutesBefore;
+    }
+    return getDefaultReminderMinutes();
+  });
+
   // Dynamic Subtasks / Checklist
   const [subtasks, setSubtasks] = useState<Subtask[]>(() => {
     if (initialBlock?.subtasks && initialBlock.subtasks.length > 0) {
@@ -189,6 +206,12 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
           { id: `st-2`, text: 'Réalisation du livrable ou flow créatif', completed: false },
         ]);
       }
+      setReminderEnabled(initialBlock.reminderEnabled !== undefined ? initialBlock.reminderEnabled : true);
+      setReminderMinutesBefore(
+        initialBlock.reminderMinutesBefore !== undefined
+          ? initialBlock.reminderMinutesBefore
+          : getDefaultReminderMinutes()
+      );
     } else {
       // Mode création d'un nouveau bloc
       setTitle(initialTitle || '');
@@ -207,6 +230,8 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
       setIsSpecificDate(true);
       setScheduledDate(getFormattedDateString(defaultDate));
       setSelectedDays([1, 2, 3, 4, 5]);
+      setReminderEnabled(true);
+      setReminderMinutesBefore(getDefaultReminderMinutes());
       if (initialTitle) {
         setSubtasks([
           { id: `st-1`, text: initialTitle, completed: false },
@@ -377,6 +402,8 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
         globalObjective: globalObjective.trim() || 'Objectif de session défini.',
         subtasks: finalSubtasks,
         checklist: finalChecklist,
+        reminderEnabled,
+        reminderMinutesBefore,
       };
 
       onUpdateBlock(updatedBlock);
@@ -401,6 +428,8 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
         notes: '',
         subtasks: finalSubtasks,
         checklist: finalChecklist,
+        reminderEnabled,
+        reminderMinutesBefore,
       };
 
       if (onAddBlocks) {
@@ -424,6 +453,8 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
         recurringDays: selectedDays,
         globalObjective: globalObjective.trim() || 'Objectif de session défini.',
         notes: '',
+        reminderEnabled,
+        reminderMinutesBefore,
         subtasks: finalSubtasks.map((st, sIdx) => ({
           id: `st-${Date.now()}-${idx}-${sIdx}`,
           text: st.text,
@@ -986,6 +1017,88 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
                 ))
               )}
             </div>
+          </div>
+
+          {/* 7. RAPPEL & NOTIFICATION DE DÉBUT D'ACTIVITÉ */}
+          <div className="bg-[var(--bg-surface-elevated)] p-4 rounded-2xl border border-[var(--border-card)] space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div
+                  className={`w-7 h-7 rounded-xl flex items-center justify-center transition-colors ${
+                    reminderEnabled
+                      ? 'bg-[#6C5CE7]/15 text-[#6C5CE7]'
+                      : 'bg-[var(--border-card)] text-[var(--text-muted)]'
+                  }`}
+                >
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-[var(--text-primary)] leading-none">
+                    Rappel & Notification de Début
+                  </h4>
+                  <span className="text-[10px] text-[var(--text-secondary)]">
+                    Alerte sonore et notification avant de démarrer
+                  </span>
+                </div>
+              </div>
+
+              {/* Toggle Switch */}
+              <button
+                type="button"
+                onClick={() => setReminderEnabled((prev) => !prev)}
+                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                  reminderEnabled ? 'bg-[#6C5CE7]' : 'bg-[var(--border-card)]'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full bg-white transition-transform transform ${
+                    reminderEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                  } shadow-sm`}
+                />
+              </button>
+            </div>
+
+            {reminderEnabled && (
+              <div className="pt-2 border-t border-[var(--border-card)] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
+                    Quand souhaitez-vous être notifié ?
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-[#6C5CE7]">
+                    {reminderMinutesBefore === 0
+                      ? "À l'heure pile (0 min)"
+                      : `${reminderMinutesBefore} min avant`}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[
+                    { min: 0, label: "À l'heure", sub: '0 min' },
+                    { min: 5, label: '5 min', sub: 'avant' },
+                    { min: 10, label: '10 min', sub: 'avant' },
+                    { min: 15, label: '15 min', sub: 'avant' },
+                    { min: 30, label: '30 min', sub: 'avant' },
+                  ].map(({ min, label, sub }) => {
+                    const isSelected = reminderMinutesBefore === min;
+                    return (
+                      <button
+                        key={min}
+                        type="button"
+                        onClick={() => setReminderMinutesBefore(min)}
+                        className={`py-2 px-1 rounded-xl text-center transition cursor-pointer border flex flex-col items-center justify-center ${
+                          isSelected
+                            ? 'bg-[#6C5CE7] border-[#6C5CE7] text-white shadow-xs ring-1 ring-[#6C5CE7]/30'
+                            : 'bg-[var(--bg-surface)] border-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[#6C5CE7]/40'
+                        }`}
+                      >
+                        <span className="text-xs font-bold leading-none">{label}</span>
+                        <span className="text-[9px] opacity-75 mt-0.5 leading-none">{sub}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Submit Actions */}

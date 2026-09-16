@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { useTheme } from '../context/ThemeContext';
+import { NotificationSettingsPopover } from './NotificationSettingsPopover';
+import { TimeBlock, DomainConfig } from '../types';
 
 interface AuthHeaderProps {
   user: User | null;
@@ -28,6 +30,10 @@ interface AuthHeaderProps {
   onOpenManagePillars?: () => void;
   onOpenInstantSession?: () => void;
   firestoreStatus: 'connected' | 'error' | 'syncing';
+  todayBlocks?: TimeBlock[];
+  categories?: DomainConfig[];
+  onTriggerTestAlert?: () => void;
+  onSelectBlock?: (blockId: string) => void;
 }
 
 export const AuthHeader: React.FC<AuthHeaderProps> = ({
@@ -40,6 +46,10 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
   onOpenManagePillars,
   onOpenInstantSession,
   firestoreStatus,
+  todayBlocks = [],
+  categories = [],
+  onTriggerTestAlert,
+  onSelectBlock,
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { theme, toggleTheme, isDark } = useTheme();
@@ -105,6 +115,14 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
               <Moon className="w-4 h-4 text-[#6C5CE7] transition-transform hover:-rotate-12" />
             )}
           </button>
+
+          {/* Centre des Notifications et Alertes */}
+          <NotificationSettingsPopover
+            todayBlocks={todayBlocks}
+            categories={categories}
+            onTriggerTestAlert={onTriggerTestAlert || (() => {})}
+            onSelectBlock={onSelectBlock}
+          />
 
           {/* Démarrer Maintenant / Session Spontanée Quick Button */}
           {onOpenInstantSession && (
