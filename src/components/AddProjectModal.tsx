@@ -336,10 +336,10 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsBulkPasteOpen(!isBulkPasteOpen)}
-                  className="text-[11px] font-bold text-[#6C5CE7] hover:underline flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-[#6C5CE7]/20 hover:bg-[#6C5CE7]/30 text-[#a29bfe] hover:text-white border border-[#6C5CE7]/40 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition shadow-sm"
                 >
-                  <ClipboardList className="w-3.5 h-3.5" />
-                  <span>{isBulkPasteOpen ? 'Fermer import' : 'Coller une liste'}</span>
+                  <ClipboardList className="w-3.5 h-3.5 text-[#00CEC9]" />
+                  <span>{isBulkPasteOpen ? 'Fermer import' : '📋 Coller une liste'}</span>
                 </button>
 
                 <div className="flex items-center gap-1.5">

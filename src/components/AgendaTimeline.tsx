@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { DomainId, TimeBlock, DomainConfig, Project } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { MonthlyCalendarWidget } from './MonthlyCalendarWidget';
@@ -14,6 +14,8 @@ import {
   CheckCircle2,
   Sparkles,
   ChevronRight,
+  ChevronLeft,
+  CalendarDays,
   TrendingUp,
   FolderOpen,
   RotateCcw,
@@ -27,6 +29,7 @@ import {
   Lock,
   MapPin,
   Zap,
+  ListTodo,
 } from 'lucide-react';
 
 interface AgendaTimelineProps {
@@ -88,15 +91,47 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   const [isMilestonesDrawerOpen, setIsMilestonesDrawerOpen] = useState(false);
   const [draggedMilestone, setDraggedMilestone] = useState<MilestoneDragData | null>(null);
   const [dragOverHourSlot, setDragOverHourSlot] = useState<string | null>(null);
-  const [timelineDisplayMode, setTimelineDisplayMode] = useState<'macro' | 'detailed'>(() => {
+  const dailyScheduleRef = useRef<HTMLDivElement>(null);
+  const [highlightSchedule, setHighlightSchedule] = useState(false);
+
+  const scrollToDailySchedule = () => {
+    if (dailyScheduleRef.current) {
+      dailyScheduleRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setHighlightSchedule(true);
+      setTimeout(() => {
+        setHighlightSchedule(false);
+      }, 2000);
+    }
+  };
+
+  const handlePrevDay = () => {
+    const prev = new Date(selectedDate);
+    prev.setDate(prev.getDate() - 1);
+    onSelectDate(prev);
+    scrollToDailySchedule();
+  };
+
+  const handleNextDay = () => {
+    const next = new Date(selectedDate);
+    next.setDate(next.getDate() + 1);
+    onSelectDate(next);
+    scrollToDailySchedule();
+  };
+
+  const handleToday = () => {
+    onSelectDate(new Date());
+    scrollToDailySchedule();
+  };
+
+  const [timelineDisplayMode, setTimelineDisplayMode] = useState<'schedule' | 'detailed' | 'macro'>(() => {
     try {
-      return (localStorage.getItem('spectrum_timeline_mode') as 'macro' | 'detailed') || 'detailed';
+      return (localStorage.getItem('spectrum_timeline_mode') as 'schedule' | 'detailed' | 'macro') || 'schedule';
     } catch {
-      return 'detailed';
+      return 'schedule';
     }
   });
 
-  const handleToggleDisplayMode = (mode: 'macro' | 'detailed') => {
+  const handleToggleDisplayMode = (mode: 'schedule' | 'detailed' | 'macro') => {
     setTimelineDisplayMode(mode);
     try {
       localStorage.setItem('spectrum_timeline_mode', mode);
@@ -104,9 +139,11 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
       // ignore
     }
     showNotification(
-      mode === 'macro'
+      mode === 'schedule'
+        ? 'Mode Emploi du Temps activé : Vue chronologique continue de la journée'
+        : mode === 'macro'
         ? 'Mode Piliers (Macro) activé : Créneaux sanctuarisés sans charge mentale'
-        : 'Mode Détaillé (Micro) activé : Titres de tâches & objectifs affichés'
+        : 'Mode Détaillé (Micro) activé : Titres de tâches & objectifs par piliers'
     );
   };
 
@@ -251,6 +288,42 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
     }));
   };
 
+  const handleToggleSubtask = (block: TimeBlock, subtaskId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!onUpdateBlock) return;
+
+    const currentSubtasks = getBlockSubtasks(block);
+    const updatedSubtasks = currentSubtasks.map((st) =>
+      st.id === subtaskId ? { ...st, completed: !st.completed } : st
+    );
+
+    const allDone = updatedSubtasks.length > 0 && updatedSubtasks.every((st) => st.completed);
+
+    onUpdateBlock({
+      ...block,
+      subtasks: updatedSubtasks,
+      completed: allDone,
+    });
+  };
+
+  // Chronological blocks for the day
+  const chronologicalBlocks = useMemo(() => {
+    return [...blocksForDay].sort((a, b) => a.startMinutes - b.startMinutes);
+  }, [blocksForDay]);
+
+  const totalPlannedMinutes = useMemo(() => {
+    return blocksForDay.reduce((acc, b) => acc + (b.durationMinutes || 0), 0);
+  }, [blocksForDay]);
+
+  const totalPlannedHoursFormatted = useMemo(() => {
+    const hours = Math.floor(totalPlannedMinutes / 60);
+    const mins = totalPlannedMinutes % 60;
+    if (hours === 0 && mins === 0) return '0h';
+    if (hours === 0) return `${mins} min`;
+    if (mins === 0) return `${hours}h`;
+    return `${hours}h${String(mins).padStart(2, '0')}`;
+  }, [totalPlannedMinutes]);
+
   // Daily statistics
   const dayTotalUnits = blocksForDay.reduce((acc, b) => {
     const subtasks = getBlockSubtasks(b);
@@ -381,6 +454,7 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
         onSelectDate={onSelectDate}
         blocks={blocks}
         categories={activeCategories}
+        onDayClickScrollToSchedule={scrollToDailySchedule}
       />
 
       {/* 2. LE RADAR D'ÉQUILIBRE MULTIPOTENTIEL (Analytics & Répartition du temps) */}
@@ -401,110 +475,161 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
         />
       )}
 
-      {/* 4. EN-TÊTE DU JOUR SÉLECTIONNÉ */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[var(--border-card)]">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)]">
-            <CalendarIcon className="w-3.5 h-3.5 text-[#6C5CE7]" />
-            <span>Vue filtrée par date • Cloud Firestore</span>
-          </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-[var(--text-primary)] mt-1 tracking-tight">
-            {formattedDateTitle}
-          </h1>
-          <p className="text-xs text-[var(--text-secondary)] mt-1">
-            {blocksForDay.length === 0
-              ? 'Aucun bloc prévu pour ce jour précis.'
-              : `${blocksForDay.length} bloc(s) actif(s) répartis dans vos ${activeCategories.length} piliers d'épanouissement.`}
-          </p>
-        </div>
+      {/* 4. EN-TÊTE ET SECTION EMPLOI DU TEMPS DE LA JOURNÉE SÉLECTIONNÉE */}
+      <div
+        ref={dailyScheduleRef}
+        id="daily-schedule-section"
+        className={`scroll-mt-4 transition-all duration-300 rounded-3xl ${
+          highlightSchedule
+            ? 'ring-4 ring-[#6C5CE7] bg-[#6C5CE7]/5 p-3 sm:p-5 shadow-2xl'
+            : ''
+        }`}
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[var(--border-card)]">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)]">
+              <CalendarIcon className="w-3.5 h-3.5 text-[#6C5CE7]" />
+              <span>Emploi du temps du jour • {selectedDateString}</span>
+            </div>
 
-        {/* Action buttons & Stats */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Quick day-wide shift controls: décaler toute la journée */}
-          {blocksForDay.length > 0 && onUpdateBlock && (
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl p-1.5 flex items-center gap-1 shadow-sm">
-              <span className="text-[10px] font-bold uppercase text-[var(--text-muted)] px-2 hidden sm:inline">
-                Décalage jour :
+            {/* Navigation Jour Précédent / Date / Jour Suivant */}
+            <div className="flex items-center gap-2 sm:gap-3 mt-1.5 flex-wrap">
+              <h1 className="text-2xl md:text-3xl font-extrabold text-[var(--text-primary)] tracking-tight">
+                {formattedDateTitle}
+              </h1>
+
+              <div className="flex items-center gap-1 bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={handlePrevDay}
+                  className="p-1.5 rounded-xl hover:bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer"
+                  title="Jour précédent"
+                  aria-label="Jour précédent"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                {!isTodaySelected && (
+                  <button
+                    type="button"
+                    onClick={handleToday}
+                    className="px-2.5 py-1 rounded-xl text-[11px] font-bold text-[#6C5CE7] hover:bg-[#6C5CE7]/10 transition cursor-pointer"
+                  >
+                    Aujourd'hui
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleNextDay}
+                  className="p-1.5 rounded-xl hover:bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer"
+                  title="Jour suivant"
+                  aria-label="Jour suivant"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-2 flex-wrap">
+              <span>
+                {blocksForDay.length === 0
+                  ? 'Aucun bloc prévu pour ce jour précis.'
+                  : `${blocksForDay.length} activité${blocksForDay.length > 1 ? 's' : ''} (${totalPlannedHoursFormatted} planifiées) réparties dans vos piliers.`}
               </span>
-              <button
-                type="button"
-                onClick={() => handleShiftAllBlocks(-30)}
-                className="px-2 py-1 rounded-xl text-xs font-mono font-semibold bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition flex items-center gap-0.5 cursor-pointer"
-                title="Avancer tous les blocs de 30 minutes"
-              >
-                <Rewind className="w-3 h-3" />
-                <span>-30m</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleShiftAllBlocks(15)}
-                className="px-2 py-1 rounded-xl text-xs font-mono font-semibold bg-[var(--bg-surface-elevated)] hover:bg-[#6C5CE7]/20 hover:text-[#6C5CE7] text-[var(--text-secondary)] transition flex items-center gap-0.5 cursor-pointer"
-                title="Décaler tous les blocs de +15 minutes"
-              >
-                <span>+15m</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleShiftAllBlocks(30)}
-                className="px-2.5 py-1 rounded-xl text-xs font-mono font-bold bg-[#6C5CE7]/15 text-[#6C5CE7] hover:bg-[#6C5CE7] hover:text-white transition flex items-center gap-1 cursor-pointer border border-[#6C5CE7]/30"
-                title="Décaler tout le planning de +30 minutes (en cas d'imprévu)"
-              >
-                <FastForward className="w-3 h-3" />
-                <span>+30m</span>
-              </button>
-            </div>
-          )}
-
-          {blocksForDay.length > 0 && (
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl px-4 py-2 flex items-center gap-3 shadow-sm">
-              <div className="text-right">
-                <div className="text-[10px] uppercase font-bold text-[var(--text-secondary)] tracking-wider">
-                  Avancement du jour
-                </div>
-                <div className="text-sm font-extrabold font-mono text-[#6C5CE7]">
-                  {dayCompletedUnits}/{dayTotalUnits} ({dayPercent}%)
-                </div>
-              </div>
-              <div className="w-8 h-8 rounded-full bg-[#6C5CE7]/10 border border-[#6C5CE7]/30 flex items-center justify-center text-[#6C5CE7]">
-                <TrendingUp className="w-4 h-4" />
-              </div>
-            </div>
-          )}
-
-          {/* Sélecteur de Mode Timeline : Macro (Piliers Sanctuarisés) vs Détaillé (Micro-tâches) */}
-          <div
-            id="agenda-mode-switcher"
-            className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl p-1 flex items-center gap-1 shadow-sm"
-          >
-            <button
-              type="button"
-              id="agenda-mode-macro-btn"
-              onClick={() => handleToggleDisplayMode('macro')}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                timelineDisplayMode === 'macro'
-                  ? 'bg-[#6C5CE7] text-white shadow-sm'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
-              }`}
-              title="Mode Piliers (Macro) : Affiche des blocs sanctuarisés épurés (Tech, Art...) et révèle l'objectif précis au clic"
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Piliers (Macro)</span>
-            </button>
-            <button
-              type="button"
-              id="agenda-mode-detailed-btn"
-              onClick={() => handleToggleDisplayMode('detailed')}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                timelineDisplayMode === 'detailed'
-                  ? 'bg-[#6C5CE7] text-white shadow-sm'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
-              }`}
-              title="Mode Détaillé (Micro) : Affiche directement le titre de chaque tâche spécifique et sa progression"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Détaillé</span>
-            </button>
+              {blocksForDay.length > 0 && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#6C5CE7]/10 text-[#6C5CE7] font-semibold border border-[#6C5CE7]/20">
+                  {dayCompletedUnits}/{dayTotalUnits} sous-tâches accomplies ({dayPercent}%)
+                </span>
+              )}
+            </p>
           </div>
+
+          {/* Action buttons & Stats */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Quick day-wide shift controls: décaler toute la journée */}
+            {blocksForDay.length > 0 && onUpdateBlock && (
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl p-1.5 flex items-center gap-1 shadow-sm">
+                <span className="text-[10px] font-bold uppercase text-[var(--text-muted)] px-2 hidden sm:inline">
+                  Décalage jour :
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleShiftAllBlocks(-30)}
+                  className="px-2 py-1 rounded-xl text-xs font-mono font-semibold bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition flex items-center gap-0.5 cursor-pointer"
+                  title="Avancer tous les blocs de 30 minutes"
+                >
+                  <Rewind className="w-3 h-3" />
+                  <span>-30m</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShiftAllBlocks(15)}
+                  className="px-2 py-1 rounded-xl text-xs font-mono font-semibold bg-[var(--bg-surface-elevated)] hover:bg-[#6C5CE7]/20 hover:text-[#6C5CE7] text-[var(--text-secondary)] transition flex items-center gap-0.5 cursor-pointer"
+                  title="Décaler tous les blocs de +15 minutes"
+                >
+                  <span>+15m</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShiftAllBlocks(30)}
+                  className="px-2.5 py-1 rounded-xl text-xs font-mono font-bold bg-[#6C5CE7]/15 text-[#6C5CE7] hover:bg-[#6C5CE7] hover:text-white transition flex items-center gap-1 cursor-pointer border border-[#6C5CE7]/30"
+                  title="Décaler tout le planning de +30 minutes (en cas d'imprévu)"
+                >
+                  <FastForward className="w-3 h-3" />
+                  <span>+30m</span>
+                </button>
+              </div>
+            )}
+
+            {/* Sélecteur de Mode : Emploi du Temps (Chronologique) vs Piliers Détaillé vs Piliers Macro */}
+            <div
+              id="agenda-mode-switcher"
+              className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl p-1 flex items-center gap-1 shadow-sm"
+            >
+              <button
+                type="button"
+                id="agenda-mode-schedule-btn"
+                onClick={() => handleToggleDisplayMode('schedule')}
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  timelineDisplayMode === 'schedule'
+                    ? 'bg-[#6C5CE7] text-white shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
+                }`}
+                title="Emploi du temps (Chronologique) : Déroulé complet de la journée heure par heure"
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Emploi du temps</span>
+              </button>
+              <button
+                type="button"
+                id="agenda-mode-detailed-btn"
+                onClick={() => handleToggleDisplayMode('detailed')}
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  timelineDisplayMode === 'detailed'
+                    ? 'bg-[#6C5CE7] text-white shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
+                }`}
+                title="Mode Piliers : Blocs rangés par catégories"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Piliers</span>
+              </button>
+              <button
+                type="button"
+                id="agenda-mode-macro-btn"
+                onClick={() => handleToggleDisplayMode('macro')}
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  timelineDisplayMode === 'macro'
+                    ? 'bg-[#6C5CE7] text-white shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
+                }`}
+                title="Mode Macro : Vue épurée"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Macro</span>
+              </button>
+            </div>
 
           <button
             type="button"
@@ -836,25 +961,311 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
         </div>
       </div>
 
-      {/* 4. BLOCS D'ACTIVITÉS RANGÉS PAR PILIERS PERSONNALISÉS */}
-      <div className="space-y-6">
-        {activeCategories.map((cat) => {
-          const domainBlocks = categorizedBlocks[cat.id] || [];
-          const Icon = getPillarIcon(cat.iconName);
+        {/* VUE EMPLOI DU TEMPS CHRONOLOGIQUE (HEURE PAR HEURE) */}
+        {timelineDisplayMode === 'schedule' ? (
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-[#6C5CE7]" />
+                <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                  Déroulement chronologique • {formattedDateTitle}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onOpenAddModal()}
+                className="px-3 py-1.5 rounded-xl bg-[#6C5CE7]/10 hover:bg-[#6C5CE7]/20 text-[#6C5CE7] text-xs font-bold border border-[#6C5CE7]/30 transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Ajouter une activité</span>
+              </button>
+            </div>
 
-          return (
-            <section
-              key={cat.id}
-              onDragOver={(e) => {
-                e.preventDefault();
-                if (dragOverPillarId !== cat.id) setDragOverPillarId(cat.id);
-              }}
-              onDragLeave={() => {
-                if (dragOverPillarId === cat.id) setDragOverPillarId(null);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOverPillarId(null);
+            {chronologicalBlocks.length === 0 ? (
+              <div className="p-8 sm:p-10 rounded-3xl bg-[var(--bg-surface)] border border-dashed border-[var(--border-card)] text-center shadow-xs">
+                <div className="w-14 h-14 rounded-2xl bg-[#6C5CE7]/10 text-[#6C5CE7] flex items-center justify-center mx-auto mb-3.5 border border-[#6C5CE7]/20">
+                  <CalendarDays className="w-7 h-7" />
+                </div>
+                <h3 className="text-base sm:text-lg font-bold text-[var(--text-primary)]">
+                  Journée entièrement libre
+                </h3>
+                <p className="text-xs sm:text-sm text-[var(--text-secondary)] max-w-md mx-auto mt-1.5 leading-relaxed">
+                  Aucune activité n'est encore planifiée pour le <strong className="text-[var(--text-primary)] font-semibold">{formattedDateTitle}</strong>. Vous pouvez y déposer un jalon Bento ou planifier un nouveau créneau.
+                </p>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => onOpenAddModal()}
+                    className="px-4 py-2.5 rounded-xl bg-[#6C5CE7] text-white text-xs sm:text-sm font-bold shadow-md shadow-[#6C5CE7]/25 hover:bg-[#5b4bc4] transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Planifier un premier bloc</span>
+                  </button>
+                  {waitingMilestonesCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsMilestonesDrawerOpen(true)}
+                      className="px-4 py-2.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-[var(--text-primary)] text-xs sm:text-sm font-semibold hover:border-[#6C5CE7] transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Layers className="w-4 h-4 text-[#6C5CE7]" />
+                      <span>Ouvrir les Jalons Bento ({waitingMilestonesCount})</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {chronologicalBlocks.map((block, index) => {
+                  const cat = activeCategories.find((c) => c.id === block.domain) || {
+                    id: block.domain,
+                    name: block.domain,
+                    color: '#6C5CE7',
+                    iconName: 'Sparkles',
+                  };
+                  const Icon = getPillarIcon(cat.iconName);
+                  const subtasks = getBlockSubtasks(block);
+                  const completedSubtasks = subtasks.filter((s) => s.completed).length;
+                  const pct = subtasks.length > 0 ? Math.round((completedSubtasks / subtasks.length) * 100) : (block.completed ? 100 : 0);
+                  const isLiveNow = isTodaySelected && currentMinutesFromMidnight >= block.startMinutes && currentMinutesFromMidnight < block.startMinutes + block.durationMinutes;
+
+                  // Detect gap with previous block
+                  const prevBlock = index > 0 ? chronologicalBlocks[index - 1] : null;
+                  const prevEndMinutes = prevBlock ? prevBlock.startMinutes + prevBlock.durationMinutes : null;
+                  const hasGap = prevEndMinutes !== null && block.startMinutes - prevEndMinutes >= 30;
+                  const gapMinutes = hasGap && prevEndMinutes !== null ? block.startMinutes - prevEndMinutes : 0;
+                  const gapHours = Math.floor(gapMinutes / 60);
+                  const gapMinsRemainder = gapMinutes % 60;
+                  const gapString = gapHours > 0 ? (gapMinsRemainder > 0 ? `${gapHours}h${gapMinsRemainder}m` : `${gapHours}h`) : `${gapMinsRemainder}m`;
+
+                  // Linked Project if any
+                  const linkedProject = projects?.find((p) => p.id === block.projectId);
+
+                  return (
+                    <React.Fragment key={block.id}>
+                      {/* Intervalle de temps libre entre deux activités */}
+                      {hasGap && prevEndMinutes !== null && (
+                        <div
+                          onClick={() => onOpenAddModal()}
+                          className="group my-1.5 py-2 px-4 rounded-xl border border-dashed border-[var(--border-card)] hover:border-[#6C5CE7]/60 bg-[var(--bg-surface-elevated)]/40 hover:bg-[#6C5CE7]/5 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xs flex items-center justify-between transition cursor-pointer"
+                          title="Créneau disponible. Cliquez pour planifier."
+                        >
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[#6C5CE7] transition-colors" />
+                            <span>
+                              Temps libre : {minutesToTimeString(prevEndMinutes)} — {block.startTime} ({gapString})
+                            </span>
+                          </div>
+                          <span className="text-[11px] font-semibold text-[#6C5CE7] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                            <Plus className="w-3 h-3" />
+                            <span>Planifier</span>
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Carte Chronologique du Bloc */}
+                      <div
+                        onClick={() => onSelectBlock(block.id)}
+                        className={`group bg-[var(--bg-surface)] border rounded-2xl p-4 sm:p-5 transition-all duration-200 hover:shadow-md relative overflow-hidden cursor-pointer ${
+                          isLiveNow
+                            ? 'border-[#FF7675] ring-2 ring-[#FF7675]/30 shadow-md'
+                            : 'border-[var(--border-card)] hover:border-[var(--border-highlight)]'
+                        }`}
+                      >
+                        {/* Live indicator if active right now */}
+                        {isLiveNow && (
+                          <div className="mb-2.5 flex items-center gap-1.5 text-[10px] font-mono font-bold text-[#FF7675] uppercase tracking-wider">
+                            <span className="w-2 h-2 rounded-full bg-[#FF7675] animate-ping inline-block" />
+                            <span>En cours en ce moment • {currentTimeString}</span>
+                          </div>
+                        )}
+
+                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
+                          {/* Colonne gauche : Horaires & Pilier */}
+                          <div className="flex items-start gap-3">
+                            <div className="flex flex-col items-center justify-center min-w-[76px] py-2 px-2 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-center shrink-0">
+                              <span className="text-xs font-mono font-bold text-[var(--text-primary)]">
+                                {block.startTime}
+                              </span>
+                              <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                                {block.endTime}
+                              </span>
+                              <span
+                                className="mt-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-extrabold"
+                                style={{
+                                  backgroundColor: `${cat.color}15`,
+                                  color: cat.color,
+                                }}
+                              >
+                                {block.durationMinutes}m
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              {/* Badges Pilier + Projet */}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border"
+                                  style={{
+                                    backgroundColor: `${cat.color}15`,
+                                    borderColor: `${cat.color}35`,
+                                    color: cat.color,
+                                  }}
+                                >
+                                  <Icon className="w-3 h-3" />
+                                  <span>{cat.name}</span>
+                                </span>
+
+                                {linkedProject && (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] border border-[var(--border-card)]"
+                                    title={`Projet : ${linkedProject.title}`}
+                                  >
+                                    <FolderOpen className="w-3 h-3 text-[#6C5CE7]" />
+                                    <span className="truncate max-w-[200px]">{linkedProject.title}</span>
+                                  </span>
+                                )}
+
+                                {block.isFixedConstraint && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--text-muted)] bg-[var(--bg-surface-elevated)] px-2 py-0.5 rounded-full border border-[var(--border-card)]">
+                                    <Lock className="w-2.5 h-2.5 text-[#E17055]" />
+                                    <span>Contrainte</span>
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Titre & Objectif */}
+                              <h3 className="text-base font-bold text-[var(--text-primary)] group-hover:text-[#6C5CE7] transition-colors leading-snug">
+                                {block.title}
+                              </h3>
+
+                              {block.globalObjective && (
+                                <p className="text-xs text-[var(--text-secondary)] leading-relaxed line-clamp-2">
+                                  {block.globalObjective}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Colonne droite : Actions & Shift rapide */}
+                          <div
+                            className="flex items-center gap-2 shrink-0 self-start md:self-auto"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {/* Shift buttons */}
+                            {onUpdateBlock && (
+                              <div className="flex items-center gap-1 bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-xl p-0.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleShiftBlock(block, -15, e)}
+                                  className="px-1.5 py-0.5 rounded-lg text-[10px] font-mono font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition cursor-pointer"
+                                  title="Avancer de 15 minutes (-15m)"
+                                >
+                                  -15m
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleShiftBlock(block, 15, e)}
+                                  className="px-1.5 py-0.5 rounded-lg text-[10px] font-mono font-semibold text-[var(--text-secondary)] hover:text-[#6C5CE7] hover:bg-[#6C5CE7]/10 transition cursor-pointer"
+                                  title="Décaler de 15 minutes (+15m)"
+                                >
+                                  +15m
+                                </button>
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => onSelectBlock(block.id)}
+                              className="px-3 py-1.5 rounded-xl bg-[#6C5CE7] hover:bg-[#5b4bc4] text-white text-xs font-bold shadow-sm transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>Ouvrir</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Sous-tâches interactives cochables directement depuis l'emploi du temps */}
+                        {subtasks.length > 0 && (
+                          <div
+                            className="mt-3.5 pt-3 border-t border-[var(--border-card)] space-y-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
+                              <span className="font-semibold flex items-center gap-1.5">
+                                <ListTodo className="w-3.5 h-3.5 text-[#6C5CE7]" />
+                                <span>Étapes & Jalons ({completedSubtasks}/{subtasks.length})</span>
+                              </span>
+                              <span className="font-mono text-[11px] font-bold text-[var(--text-secondary)]">
+                                {pct}%
+                              </span>
+                            </div>
+
+                            {/* Barre de progression */}
+                            <div className="w-full h-1.5 bg-[var(--border-card)] rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-300"
+                                style={{
+                                  width: `${pct}%`,
+                                  backgroundColor: cat.color,
+                                }}
+                              />
+                            </div>
+
+                            {/* Liste des cases à cocher en direct */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                              {subtasks.map((st) => (
+                                <button
+                                  key={st.id}
+                                  type="button"
+                                  onClick={(e) => handleToggleSubtask(block, st.id, e)}
+                                  className={`flex items-start gap-2 p-2 rounded-xl text-left text-xs transition cursor-pointer border ${
+                                    st.completed
+                                      ? 'bg-[var(--bg-surface-elevated)]/40 border-[var(--border-card)] text-[var(--text-muted)] line-through'
+                                      : 'bg-[var(--bg-surface-elevated)] border-[var(--border-card)] text-[var(--text-primary)] hover:border-[#6C5CE7]/40'
+                                  }`}
+                                >
+                                  <div
+                                    className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition ${
+                                      st.completed
+                                        ? 'bg-[#55E6C1] border-[#55E6C1] text-[#2D3436]'
+                                        : 'border-[var(--border-card)] bg-[var(--bg-surface)] hover:border-[#6C5CE7]'
+                                    }`}
+                                  >
+                                    {st.completed && <Check className="w-3 h-3 stroke-[3]" />}
+                                  </div>
+                                  <span className="leading-snug">{st.text}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* 5. BLOCS D'ACTIVITÉS RANGÉS PAR PILIERS PERSONNALISÉS (Modes Détaillé / Macro) */
+          <div className="space-y-6">
+            {activeCategories.map((cat) => {
+              const domainBlocks = categorizedBlocks[cat.id] || [];
+              const Icon = getPillarIcon(cat.iconName);
+
+              return (
+                <section
+                  key={cat.id}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (dragOverPillarId !== cat.id) setDragOverPillarId(cat.id);
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverPillarId === cat.id) setDragOverPillarId(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOverPillarId(null);
                 setDragOverBlockId(null);
 
                 // 1. Vérifier si c'est un Jalon Bento
@@ -1261,6 +1672,8 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           );
         })}
       </div>
+    )}
+  </div>
 
       {/* Modal d'importation de calendrier Xiaomi / Google (.ics) */}
       <ImportCalendarModal

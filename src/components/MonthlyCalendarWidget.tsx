@@ -8,6 +8,7 @@ interface MonthlyCalendarWidgetProps {
   onSelectDate: (date: Date) => void;
   blocks: TimeBlock[];
   categories?: DomainConfig[];
+  onDayClickScrollToSchedule?: () => void;
 }
 
 const MONTH_NAMES = [
@@ -22,6 +23,7 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
   onSelectDate,
   blocks,
   categories,
+  onDayClickScrollToSchedule,
 }) => {
   // Calendar browsing month/year
   const [viewYear, setViewYear] = useState<number>(selectedDate.getFullYear());
@@ -122,7 +124,7 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
               {MONTH_NAMES[viewMonth]} {viewYear}
             </h2>
             <p className="text-[11px] text-[var(--text-secondary)]">
-              Cliquez sur un jour pour filtrer par piliers
+              Cliquez sur un jour pour ouvrir son emploi du temps complet
             </p>
           </div>
         </div>
@@ -198,6 +200,7 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
               onClick={() => {
                 const newDate = new Date(viewYear, viewMonth, day);
                 onSelectDate(newDate);
+                onDayClickScrollToSchedule?.();
               }}
               className={`group relative h-10 md:h-11 flex flex-col items-center justify-center rounded-xl text-xs transition-all duration-150 ${
                 selected
