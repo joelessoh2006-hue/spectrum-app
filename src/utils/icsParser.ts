@@ -116,119 +116,161 @@ function unescapeICSText(text: string): string {
  * Smart detection: Guess if the event should be imported as a fixed constraint
  * (doctor, meeting, admin) or converted to a creative Spectrum Pillar block.
  */
-function guessCategoryAndType(
+export function guessCategoryAndType(
   title: string,
   description: string,
   defaultPillarId: string
-): { importAs: 'constraint' | 'spectrum_block'; pillarId: string } {
+): { importAs: 'constraint' | 'spectrum_block'; pillarId: string; reason: string } {
   const combined = `${title} ${description}`.toLowerCase();
 
-  // Typical fixed obligations / external constraints
-  const constraintKeywords = [
-    'docteur',
-    'dentiste',
-    'médical',
-    'rendez-vous',
-    'rdv',
-    'réunion',
-    'meeting',
-    'call',
-    'sync',
-    'standup',
-    'banque',
-    'train',
-    'vol',
-    'avion',
-    'courses',
-    'admin',
-    'impots',
-    'dentist',
-    'visio',
-    'client',
+  // 1. Médical & Santé
+  const medicalKeywords = [
+    'docteur', 'dentiste', 'médical', 'medical', 'medecin', 'médecin',
+    'kiné', 'kine', 'psy', 'ophtalmo', 'santé', 'sante', 'clinique',
+    'hopital', 'hôpital', 'pharmacie', 'vaccin', 'ordonnance', 'dentist',
+    'consultation', 'doctolib'
   ];
-
-  for (const kw of constraintKeywords) {
+  for (const kw of medicalKeywords) {
     if (combined.includes(kw)) {
-      return { importAs: 'constraint', pillarId: defaultPillarId };
+      return {
+        importAs: 'constraint',
+        pillarId: defaultPillarId,
+        reason: '🏥 Santé & Médical → Contrainte fixe verrouillée',
+      };
     }
   }
 
-  // Tech keywords
+  // 2. Réunions & Sync professionnelles
+  const meetingKeywords = [
+    'réunion', 'reunion', 'meeting', 'call', 'sync', 'standup', 'entretien',
+    'interview', '1:1', 'point', 'debrief', 'revue', 'client', 'soutenance',
+    'visio', 'zoom', 'teams', 'meet', 'google meet'
+  ];
+  for (const kw of meetingKeywords) {
+    if (combined.includes(kw)) {
+      return {
+        importAs: 'constraint',
+        pillarId: defaultPillarId,
+        reason: '💼 Réunion & Échange pro → Contrainte fixe verrouillée',
+      };
+    }
+  }
+
+  // 3. Cours, Université & Études
+  const schoolKeywords = [
+    'cours', 'exam', 'examen', 'partiel', 'td', 'tp', 'amphi', 'université',
+    'universite', 'école', 'ecole', 'formation', 'classe', 'devoir', 'leçon', 'lecon', 'prof'
+  ];
+  for (const kw of schoolKeywords) {
+    if (combined.includes(kw)) {
+      return {
+        importAs: 'constraint',
+        pillarId: defaultPillarId,
+        reason: '🎓 Cours & Études → Contrainte horaire fixe',
+      };
+    }
+  }
+
+  // 4. Administratif & Quotidien
+  const adminKeywords = [
+    'banque', 'impots', 'impôts', 'mairie', 'prefecture', 'préfecture',
+    'poste', 'colis', 'courses', 'ménage', 'menage', 'garage', 'admin',
+    'rendez-vous', 'rdv', 'facture', 'notaire'
+  ];
+  for (const kw of adminKeywords) {
+    if (combined.includes(kw)) {
+      return {
+        importAs: 'constraint',
+        pillarId: defaultPillarId,
+        reason: '📋 Administratif / Démarche → Contrainte fixe',
+      };
+    }
+  }
+
+  // 5. Transports & Trajets
+  const transportKeywords = [
+    'train', 'sncf', 'tgv', 'ter', 'vol', 'avion', 'trajet', 'bus',
+    'covoiturage', 'uber', 'gare', 'aeroport', 'aéroport', 'départ', 'arrivee'
+  ];
+  for (const kw of transportKeywords) {
+    if (combined.includes(kw)) {
+      return {
+        importAs: 'constraint',
+        pillarId: defaultPillarId,
+        reason: '🚆 Transport & Trajet → Créneau fixe bloqué',
+      };
+    }
+  }
+
+  // 6. Événements festifs / Calendrier personnel (anniversaires, vacances, fériés)
+  const personalKeywords = [
+    'anniversaire', 'fête', 'fete', 'vacances', 'férié', 'ferie',
+    'congé', 'conge', 'rtt', 'noel', 'noël', 'nouvel an'
+  ];
+  for (const kw of personalKeywords) {
+    if (combined.includes(kw)) {
+      return {
+        importAs: 'constraint',
+        pillarId: defaultPillarId,
+        reason: '🎉 Repère agenda / Personnel → Contrainte repère',
+      };
+    }
+  }
+
+  // 7. Tech & Développement
   const techKeywords = [
-    'code',
-    'dev',
-    'flutter',
-    'react',
-    'python',
-    'javascript',
-    'typescript',
-    'cyber',
-    'nmap',
-    'linux',
-    'serveur',
-    'cloud',
-    'database',
-    'algo',
-    'bug',
-    'api',
-    'docker',
-    'git',
-    'architecture',
+    'code', 'dev', 'flutter', 'react', 'python', 'javascript', 'typescript',
+    'cyber', 'nmap', 'linux', 'serveur', 'cloud', 'database', 'algo', 'bug',
+    'api', 'docker', 'git', 'github', 'architecture', 'front', 'backend', 'ia', 'gemini'
   ];
   for (const kw of techKeywords) {
     if (combined.includes(kw)) {
-      return { importAs: 'spectrum_block', pillarId: 'tech' };
+      return {
+        importAs: 'spectrum_block',
+        pillarId: 'tech',
+        reason: '💻 Tech & Développement → Suggéré en Bloc Actif (Pilier Tech)',
+      };
     }
   }
 
-  // Art keywords
+  // 8. Art & Création musicale / visuelle
   const artKeywords = [
-    'rap',
-    'musique',
-    'beat',
-    'prod',
-    'chant',
-    'guitare',
-    'piano',
-    'studio',
-    'mix',
-    'mastering',
-    'dessin',
-    'graphisme',
-    'photo',
-    'vidéo',
-    'montage',
-    'écriture',
-    'texte',
+    'rap', 'musique', 'beat', 'prod', 'chant', 'guitare', 'piano', 'studio',
+    'mix', 'mastering', 'dessin', 'graphisme', 'photo', 'vidéo', 'video',
+    'montage', 'écriture', 'ecriture', 'texte', 'clip', 'tournage', 'voix'
   ];
   for (const kw of artKeywords) {
     if (combined.includes(kw)) {
-      return { importAs: 'spectrum_block', pillarId: 'art' };
+      return {
+        importAs: 'spectrum_block',
+        pillarId: 'art',
+        reason: '🎨 Art & Création → Suggéré en Bloc Actif (Pilier Art)',
+      };
     }
   }
 
-  // Curiosity keywords
+  // 9. Curiosité & Exploration
   const curiosityKeywords = [
-    'lecture',
-    'livre',
-    'recherche',
-    'podcast',
-    'veille',
-    'philosophie',
-    'neuro',
-    'science',
-    'conférence',
-    'article',
-    'synthèse',
+    'lecture', 'livre', 'recherche', 'podcast', 'veille', 'philosophie',
+    'neuro', 'science', 'conférence', 'conference', 'article', 'synthèse',
+    'synthese', 'documentaire'
   ];
   for (const kw of curiosityKeywords) {
     if (combined.includes(kw)) {
-      return { importAs: 'spectrum_block', pillarId: 'curiosity' };
+      return {
+        importAs: 'spectrum_block',
+        pillarId: 'curiosity',
+        reason: '📚 Curiosité & Synthèse → Suggéré en Bloc Actif (Pilier Curiosité)',
+      };
     }
   }
 
   // Default: import as fixed constraint to prevent clutter, but easy to toggle
-  return { importAs: 'constraint', pillarId: defaultPillarId };
+  return {
+    importAs: 'constraint',
+    pillarId: defaultPillarId,
+    reason: '🔒 Créneau extérieur → Suggéré en Contrainte fixe (modifiable)',
+  };
 }
 
 function createEventFromProps(
@@ -236,10 +278,19 @@ function createEventFromProps(
   defaultPillarId: string,
   targetFallbackDate?: Date
 ): ImportedCalendarEvent | null {
-  const rawTitle = props['SUMMARY'] || 'Événement sans titre';
+  let rawTitle = (props['SUMMARY'] || '').trim();
+  if (!rawTitle) {
+    if (props['DESCRIPTION'] && props['DESCRIPTION'].trim()) {
+      rawTitle = props['DESCRIPTION'].trim().split('\n')[0].substring(0, 50);
+    } else if (props['LOCATION'] && props['LOCATION'].trim()) {
+      rawTitle = `Rendez-vous à : ${props['LOCATION'].trim()}`;
+    } else {
+      rawTitle = 'Événement calendrier sans titre';
+    }
+  }
   const title = unescapeICSText(rawTitle);
-  const description = props['DESCRIPTION'] ? unescapeICSText(props['DESCRIPTION']) : undefined;
-  const location = props['LOCATION'] ? unescapeICSText(props['LOCATION']) : undefined;
+  const description = props['DESCRIPTION'] ? unescapeICSText(props['DESCRIPTION'].trim()) : undefined;
+  const location = props['LOCATION'] ? unescapeICSText(props['LOCATION'].trim()) : undefined;
 
   const startDate = parseICSDate(props['DTSTART']);
   if (!startDate) return null;
@@ -260,7 +311,14 @@ function createEventFromProps(
   const startTime = `${formatTwoDigits(startDate.getHours())}:${formatTwoDigits(startDate.getMinutes())}`;
   const endTime = `${formatTwoDigits(endDate.getHours())}:${formatTwoDigits(endDate.getMinutes())}`;
 
-  const { importAs, pillarId } = guessCategoryAndType(title, description || '', defaultPillarId);
+  const isDateOnly = Boolean(
+    (props['DTSTART_PARAMS'] && props['DTSTART_PARAMS'].toUpperCase().includes('VALUE=DATE')) ||
+    (props['DTSTART'] && props['DTSTART'].trim().length === 8)
+  );
+
+  const isAllDay = isDateOnly || durationMinutes >= 1440 || (startTime === '00:00' && endTime === '00:00');
+
+  const { importAs, pillarId, reason } = guessCategoryAndType(title, description || '', defaultPillarId);
 
   return {
     id: props['UID'] || `ics-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -268,8 +326,8 @@ function createEventFromProps(
     startDate,
     endDate,
     dateStr,
-    startTime,
-    endTime,
+    startTime: isAllDay && startTime === '00:00' ? '00:00' : startTime,
+    endTime: isAllDay && endTime === '00:00' ? '23:59' : endTime,
     durationMinutes,
     description,
     location,
@@ -277,6 +335,8 @@ function createEventFromProps(
     importAs,
     selectedPillarId: pillarId,
     included: true,
+    isAllDay,
+    classificationReason: isAllDay ? '📅 Événement journée entière (All-Day)' : reason,
   };
 }
 

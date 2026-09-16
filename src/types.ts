@@ -69,6 +69,8 @@ export interface ImportedCalendarEvent {
   importAs: 'constraint' | 'spectrum_block';
   selectedPillarId: string;
   included: boolean;
+  isAllDay?: boolean;
+  classificationReason?: string;
 }
 
 export interface ProjectMilestone {
