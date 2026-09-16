@@ -9,6 +9,7 @@ interface MonthlyCalendarWidgetProps {
   blocks: TimeBlock[];
   categories?: DomainConfig[];
   onDayClickScrollToSchedule?: () => void;
+  onOpenDaySchedule?: () => void;
 }
 
 const MONTH_NAMES = [
@@ -24,6 +25,7 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
   blocks,
   categories,
   onDayClickScrollToSchedule,
+  onOpenDaySchedule,
 }) => {
   // Calendar browsing month/year
   const [viewYear, setViewYear] = useState<number>(selectedDate.getFullYear());
@@ -200,7 +202,11 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
               onClick={() => {
                 const newDate = new Date(viewYear, viewMonth, day);
                 onSelectDate(newDate);
-                onDayClickScrollToSchedule?.();
+                if (onOpenDaySchedule) {
+                  onOpenDaySchedule();
+                } else if (onDayClickScrollToSchedule) {
+                  onDayClickScrollToSchedule();
+                }
               }}
               className={`group relative h-10 md:h-11 flex flex-col items-center justify-center rounded-xl text-xs transition-all duration-150 ${
                 selected
@@ -248,8 +254,9 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
           ))}
         </div>
 
-        <div className="font-mono text-[10px] text-[var(--text-muted)]">
-          Cloud Firestore
+        <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
+          <span className="text-[#A29BFE] font-medium hidden sm:inline">💡 Cliquez sur un jour pour ouvrir son emploi du temps</span>
+          <span>• Cloud Firestore</span>
         </div>
       </div>
     </div>

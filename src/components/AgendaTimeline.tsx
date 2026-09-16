@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { DomainId, TimeBlock, DomainConfig, Project } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { MonthlyCalendarWidget } from './MonthlyCalendarWidget';
@@ -6,30 +6,18 @@ import { CategoriesExplorationGrid } from './CategoriesExplorationGrid';
 import { MultipotentialBalanceRadar } from './MultipotentialBalanceRadar';
 import { ImportCalendarModal } from './ImportCalendarModal';
 import { WaitingMilestonesDrawer, MilestoneDragData } from './WaitingMilestonesDrawer';
-import { getPillarIcon } from '../utils/iconMap';
+import { DayScheduleSheet } from './DayScheduleSheet';
 import {
-  Calendar as CalendarIcon,
   Clock,
   Plus,
-  CheckCircle2,
   Sparkles,
-  ChevronRight,
-  ChevronLeft,
   CalendarDays,
-  TrendingUp,
-  FolderOpen,
   RotateCcw,
-  Settings2,
   Layers,
-  Check,
-  FastForward,
-  Rewind,
-  GripVertical,
   UploadCloud,
-  Lock,
-  MapPin,
   Zap,
-  ListTodo,
+  ChevronRight,
+  Calendar as CalendarIcon,
 } from 'lucide-react';
 
 interface AgendaTimelineProps {
@@ -40,7 +28,7 @@ interface AgendaTimelineProps {
   onUpdateBlock?: (block: TimeBlock) => void;
   onAddBlock?: (newBlock: Omit<TimeBlock, 'id'>) => void;
   onShiftDayBlocks?: (minutes: number) => void;
-  onOpenAddModal: (pillarId?: string) => void;
+  onOpenAddModal: (pillarId?: string, defaultDateStr?: string) => void;
   onOpenProjects: () => void;
   onSeedTemplates?: () => void;
   onClearBlocks?: () => void;
@@ -63,6 +51,12 @@ const FRENCH_MONTHS = [
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
 ];
 
+const minutesToTimeString = (minutes: number): string => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
+
 export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   blocks,
   selectedDate,
@@ -83,125 +77,10 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   onStartInstantSession,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
-  const [dragOverPillarId, setDragOverPillarId] = useState<string | null>(null);
-  const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null);
-  const [shiftFeedback, setShiftFeedback] = useState<string | null>(null);
+  const [isDayScheduleOpen, setIsDayScheduleOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isMilestonesDrawerOpen, setIsMilestonesDrawerOpen] = useState(false);
   const [draggedMilestone, setDraggedMilestone] = useState<MilestoneDragData | null>(null);
-  const [dragOverHourSlot, setDragOverHourSlot] = useState<string | null>(null);
-  const dailyScheduleRef = useRef<HTMLDivElement>(null);
-  const [highlightSchedule, setHighlightSchedule] = useState(false);
-
-  const scrollToDailySchedule = () => {
-    if (dailyScheduleRef.current) {
-      dailyScheduleRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      setHighlightSchedule(true);
-      setTimeout(() => {
-        setHighlightSchedule(false);
-      }, 2000);
-    }
-  };
-
-  const handlePrevDay = () => {
-    const prev = new Date(selectedDate);
-    prev.setDate(prev.getDate() - 1);
-    onSelectDate(prev);
-    scrollToDailySchedule();
-  };
-
-  const handleNextDay = () => {
-    const next = new Date(selectedDate);
-    next.setDate(next.getDate() + 1);
-    onSelectDate(next);
-    scrollToDailySchedule();
-  };
-
-  const handleToday = () => {
-    onSelectDate(new Date());
-    scrollToDailySchedule();
-  };
-
-  const [timelineDisplayMode, setTimelineDisplayMode] = useState<'schedule' | 'detailed' | 'macro'>(() => {
-    try {
-      return (localStorage.getItem('spectrum_timeline_mode') as 'schedule' | 'detailed' | 'macro') || 'schedule';
-    } catch {
-      return 'schedule';
-    }
-  });
-
-  const handleToggleDisplayMode = (mode: 'schedule' | 'detailed' | 'macro') => {
-    setTimelineDisplayMode(mode);
-    try {
-      localStorage.setItem('spectrum_timeline_mode', mode);
-    } catch {
-      // ignore
-    }
-    showNotification(
-      mode === 'schedule'
-        ? 'Mode Emploi du Temps activé : Vue chronologique continue de la journée'
-        : mode === 'macro'
-        ? 'Mode Piliers (Macro) activé : Créneaux sanctuarisés sans charge mentale'
-        : 'Mode Détaillé (Micro) activé : Titres de tâches & objectifs par piliers'
-    );
-  };
-
-  const showNotification = (msg: string) => {
-    setShiftFeedback(msg);
-    setTimeout(() => {
-      setShiftFeedback(null);
-    }, 2400);
-  };
-
-  // Convert minutes from midnight to "HH:MM"
-  const minutesToTimeString = (mins: number): string => {
-    const clamped = Math.max(0, Math.min(23 * 60 + 59, mins));
-    const h = Math.floor(clamped / 60);
-    const m = clamped % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  };
-
-  // Shift an individual block by +/- delta minutes
-  const handleShiftBlock = (block: TimeBlock, deltaMinutes: number, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (!onUpdateBlock) return;
-
-    const newStartMinutes = Math.max(0, Math.min(24 * 60 - block.durationMinutes, block.startMinutes + deltaMinutes));
-    const newEndMinutes = newStartMinutes + block.durationMinutes;
-
-    const updated: TimeBlock = {
-      ...block,
-      startMinutes: newStartMinutes,
-      startTime: minutesToTimeString(newStartMinutes),
-      endTime: minutesToTimeString(newEndMinutes),
-    };
-
-    onUpdateBlock(updated);
-    showNotification(`« ${block.title} » décalé de ${deltaMinutes > 0 ? `+${deltaMinutes}` : deltaMinutes} min (${updated.startTime})`);
-  };
-
-  // Shift entire day's blocks by delta minutes
-  const handleShiftAllBlocks = (deltaMinutes: number) => {
-    if (onShiftDayBlocks) {
-      onShiftDayBlocks(deltaMinutes);
-      showNotification(`Tous les blocs du jour décalés de ${deltaMinutes > 0 ? `+${deltaMinutes}` : deltaMinutes} min`);
-      return;
-    }
-
-    if (!onUpdateBlock) return;
-    blocksForDay.forEach((block) => {
-      const newStartMinutes = Math.max(0, Math.min(24 * 60 - block.durationMinutes, block.startMinutes + deltaMinutes));
-      const newEndMinutes = newStartMinutes + block.durationMinutes;
-      onUpdateBlock({
-        ...block,
-        startMinutes: newStartMinutes,
-        startTime: minutesToTimeString(newStartMinutes),
-        endTime: minutesToTimeString(newEndMinutes),
-      });
-    });
-    showNotification(`Tous les blocs du jour décalés de ${deltaMinutes > 0 ? `+${deltaMinutes}` : deltaMinutes} min`);
-  };
 
   // Update clock every 30 seconds
   useEffect(() => {
@@ -219,10 +98,9 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
 
   const currentHours = currentTime.getHours();
   const currentMinutes = currentTime.getMinutes();
-  const currentMinutesFromMidnight = currentHours * 60 + currentMinutes;
-  const currentTimeString = `${String(currentHours).padStart(2, '0')}:${String(
-    currentMinutes
-  ).padStart(2, '0')}`;
+  const currentTimeString = `${String(currentHours).padStart(2, '0')}:${String(currentMinutes).padStart(2, '0')}`;
+
+  const activeCategories: DomainConfig[] = categories && categories.length > 0 ? categories : Object.values(DOMAINS);
 
   // Formatted date title
   const dayName = FRENCH_DAYS[selectedDate.getDay()];
@@ -239,113 +117,32 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
 
   const selectedDayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
 
-  const blocksForDay = blocks.filter((block) => {
-    if (block.date) {
-      return block.date === selectedDateString;
-    }
-    if (block.isRecurring && Array.isArray(block.recurringDays)) {
-      return block.recurringDays.includes(selectedDayOfWeek);
-    }
-    return false;
-  });
-
-  // Active categories list
-  const activeCategories: DomainConfig[] = Array.isArray(categories)
-    ? categories
-    : [];
-
-  // Group blocks by category
-  const categorizedBlocks: Record<string, TimeBlock[]> = {};
-  activeCategories.forEach((cat) => {
-    categorizedBlocks[cat.id] = [];
-  });
-
-  blocksForDay.forEach((block) => {
-    if (categorizedBlocks[block.domain]) {
-      categorizedBlocks[block.domain].push(block);
-    } else {
-      // If domain doesn't exist in active categories, put it in the first or create bucket
-      if (!categorizedBlocks[block.domain]) {
-        categorizedBlocks[block.domain] = [];
+  const blocksForDay = useMemo(() => {
+    return blocks.filter((block) => {
+      if (block.date) {
+        return block.date === selectedDateString;
       }
-      categorizedBlocks[block.domain].push(block);
-    }
-  });
-
-  // Sort blocks chronologically
-  Object.keys(categorizedBlocks).forEach((catId) => {
-    categorizedBlocks[catId].sort((a, b) => a.startMinutes - b.startMinutes);
-  });
-
-  const getBlockSubtasks = (block: TimeBlock) => {
-    if (block.subtasks && block.subtasks.length > 0) {
-      return block.subtasks;
-    }
-    return (block.checklist || []).map((c) => ({
-      id: c.id,
-      text: c.title,
-      completed: c.isCompleted,
-    }));
-  };
-
-  const handleToggleSubtask = (block: TimeBlock, subtaskId: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (!onUpdateBlock) return;
-
-    const currentSubtasks = getBlockSubtasks(block);
-    const updatedSubtasks = currentSubtasks.map((st) =>
-      st.id === subtaskId ? { ...st, completed: !st.completed } : st
-    );
-
-    const allDone = updatedSubtasks.length > 0 && updatedSubtasks.every((st) => st.completed);
-
-    onUpdateBlock({
-      ...block,
-      subtasks: updatedSubtasks,
-      completed: allDone,
+      if (block.isRecurring && Array.isArray(block.recurringDays)) {
+        return block.recurringDays.includes(selectedDayOfWeek);
+      }
+      return false;
     });
-  };
-
-  // Chronological blocks for the day
-  const chronologicalBlocks = useMemo(() => {
-    return [...blocksForDay].sort((a, b) => a.startMinutes - b.startMinutes);
-  }, [blocksForDay]);
+  }, [blocks, selectedDateString, selectedDayOfWeek]);
 
   const totalPlannedMinutes = useMemo(() => {
     return blocksForDay.reduce((acc, b) => acc + (b.durationMinutes || 0), 0);
   }, [blocksForDay]);
 
   const totalPlannedHoursFormatted = useMemo(() => {
-    const hours = Math.floor(totalPlannedMinutes / 60);
-    const mins = totalPlannedMinutes % 60;
-    if (hours === 0 && mins === 0) return '0h';
-    if (hours === 0) return `${mins} min`;
-    if (mins === 0) return `${hours}h`;
-    return `${hours}h${String(mins).padStart(2, '0')}`;
+    if (totalPlannedMinutes >= 60) {
+      const h = Math.floor(totalPlannedMinutes / 60);
+      const m = totalPlannedMinutes % 60;
+      return `${h}h${m > 0 ? `${m}m` : ''}`;
+    }
+    return `${totalPlannedMinutes} min`;
   }, [totalPlannedMinutes]);
 
-  // Daily statistics
-  const dayTotalUnits = blocksForDay.reduce((acc, b) => {
-    const subtasks = getBlockSubtasks(b);
-    return acc + (subtasks.length > 0 ? subtasks.length : 1);
-  }, 0);
-
-  const dayCompletedUnits = blocksForDay.reduce((acc, b) => {
-    const subtasks = getBlockSubtasks(b);
-    if (subtasks.length > 0) {
-      return acc + subtasks.filter((i) => i.completed).length;
-    }
-    return acc + (b.completed ? 1 : 0);
-  }, 0);
-
-  const dayPercent = dayTotalUnits > 0 ? Math.round((dayCompletedUnits / dayTotalUnits) * 100) : 0;
-
-  const HOURS_TIMELINE = [
-    '07:00', '08:00', '09:00', '10:00', '11:00', '12:00',
-    '13:00', '14:00', '15:00', '16:00', '17:00', '18:00',
-    '19:00', '20:00', '21:00'
-  ];
-
+  // Count waiting uncompleted milestones from active projects
   const waitingMilestonesCount = useMemo(() => {
     if (!projects || projects.length === 0) return 0;
     let count = 0;
@@ -403,385 +200,197 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
         { id: `st-${Date.now()}-2`, text: 'Coder et implémenter le composant', completed: false },
         { id: `st-${Date.now()}-3`, text: 'Tester et valider le rendu', completed: false },
       ],
-      notes: `### 🎯 Jalon Bento : ${data.title}\n- Projet parent : **${data.projectTitle}**\n- Pilier : **${data.domain}**\n- Prévu le : **${selectedDateString}** de ${start} à ${endTimeStr}\n\n#### Étapes clés :\n- [ ] Analyse & préparation\n- [ ] Réalisation technique\n- [ ] Validation du jalon`,
+      notes: `### 🎯 Jalon Bento : ${data.title}\n- Projet parent : **${data.projectTitle}**\n- Pilier : **${data.domain}**\n- Prévu le : **${selectedDateString}** de ${start} à ${endTimeStr}`,
     };
 
     onAddBlock(newBlock);
-    showNotification(`Jalon « ${data.title} » planifié à ${start} (${durationMinutes} min) !`);
-  };
-
-  const handleDropOnHour = (hour: string, e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOverHourSlot(null);
-
-    // 1. Drop d'un jalon Bento
-    const milestoneRaw = e.dataTransfer.getData('application/spectrum-milestone');
-    if (milestoneRaw) {
-      try {
-        const milestoneData: MilestoneDragData = JSON.parse(milestoneRaw);
-        handleScheduleMilestoneFromDrawer(milestoneData, hour, 90);
-        return;
-      } catch (_) {}
-    }
-
-    // 2. Drop d'un bloc existant pour le repositionner à cette heure
-    const droppedBlockId = e.dataTransfer.getData('text/plain') || draggedBlockId;
-    if (droppedBlockId && onUpdateBlock) {
-      const sourceBlock = blocks.find((b) => b.id === droppedBlockId);
-      if (sourceBlock) {
-        const [h, m] = hour.split(':').map(Number);
-        const newStart = h * 60 + m;
-        const newEnd = Math.min(23 * 60 + 59, newStart + sourceBlock.durationMinutes);
-        onUpdateBlock({
-          ...sourceBlock,
-          date: selectedDateString,
-          startMinutes: newStart,
-          startTime: hour,
-          endTime: minutesToTimeString(newEnd),
-        });
-        showNotification(`« ${sourceBlock.title} » déplacé à ${hour}`);
-      }
-      setDraggedBlockId(null);
-    }
   };
 
   return (
     <div className="pb-24 max-w-4xl mx-auto px-4 pt-4 text-[var(--text-primary)] font-['Plus_Jakarta_Sans',sans-serif] space-y-6">
-      {/* 1. WIDGET CALENDRIER MENSUEL EN HAUT */}
+      {/* 1. WIDGET CALENDRIER MENSUEL EN HAUT (Option 1 : Clic sur un jour ouvre le volet) */}
       <MonthlyCalendarWidget
         selectedDate={selectedDate}
-        onSelectDate={onSelectDate}
+        onSelectDate={(date) => {
+          onSelectDate(date);
+          setIsDayScheduleOpen(true);
+        }}
         blocks={blocks}
         categories={activeCategories}
-        onDayClickScrollToSchedule={scrollToDailySchedule}
+        onOpenDaySchedule={() => setIsDayScheduleOpen(true)}
       />
 
-      {/* 2. LE RADAR D'ÉQUILIBRE MULTIPOTENTIEL (Analytics & Répartition du temps) */}
-      <MultipotentialBalanceRadar
-        blocks={blocks}
-        categories={activeCategories}
-        selectedDate={selectedDate}
-      />
-
-      {/* 3. EXPLORATION DES PILIERS (LUMA STYLE) */}
-      {onOpenManagePillars && (
-        <CategoriesExplorationGrid
-          categories={activeCategories}
-          blocks={blocksForDay}
-          onOpenManagePillars={onOpenManagePillars}
-          onQuickAddBlockForPillar={(catId) => onOpenAddModal(catId)}
-          onSelectCategory={(catId) => onOpenAddModal(catId)}
-        />
-      )}
-
-      {/* 4. EN-TÊTE ET SECTION EMPLOI DU TEMPS DE LA JOURNÉE SÉLECTIONNÉE */}
-      <div
-        ref={dailyScheduleRef}
-        id="daily-schedule-section"
-        className={`scroll-mt-4 transition-all duration-300 rounded-3xl ${
-          highlightSchedule
-            ? 'ring-4 ring-[#6C5CE7] bg-[#6C5CE7]/5 p-3 sm:p-5 shadow-2xl'
-            : ''
-        }`}
+      {/* 2. CARTE ÉLÉGANTE DU JOUR SÉLECTIONNÉ : Aperçu immédiat & Déclencheur du Volet */}
+      <section
+        id="selected-day-overview-card"
+        aria-label="Aperçu de la journée sélectionnée"
+        className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5 transition-all"
       >
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[var(--border-card)]">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)]">
-              <CalendarIcon className="w-3.5 h-3.5 text-[#6C5CE7]" />
-              <span>Emploi du temps du jour • {selectedDateString}</span>
-            </div>
-
-            {/* Navigation Jour Précédent / Date / Jour Suivant */}
-            <div className="flex items-center gap-2 sm:gap-3 mt-1.5 flex-wrap">
-              <h1 className="text-2xl md:text-3xl font-extrabold text-[var(--text-primary)] tracking-tight">
-                {formattedDateTitle}
-              </h1>
-
-              <div className="flex items-center gap-1 bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl p-1 shadow-sm">
-                <button
-                  type="button"
-                  onClick={handlePrevDay}
-                  className="p-1.5 rounded-xl hover:bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer"
-                  title="Jour précédent"
-                  aria-label="Jour précédent"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-
-                {!isTodaySelected && (
-                  <button
-                    type="button"
-                    onClick={handleToday}
-                    className="px-2.5 py-1 rounded-xl text-[11px] font-bold text-[#6C5CE7] hover:bg-[#6C5CE7]/10 transition cursor-pointer"
-                  >
-                    Aujourd'hui
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleNextDay}
-                  className="p-1.5 rounded-xl hover:bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer"
-                  title="Jour suivant"
-                  aria-label="Jour suivant"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-2 flex-wrap">
-              <span>
-                {blocksForDay.length === 0
-                  ? 'Aucun bloc prévu pour ce jour précis.'
-                  : `${blocksForDay.length} activité${blocksForDay.length > 1 ? 's' : ''} (${totalPlannedHoursFormatted} planifiées) réparties dans vos piliers.`}
-              </span>
-              {blocksForDay.length > 0 && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#6C5CE7]/10 text-[#6C5CE7] font-semibold border border-[#6C5CE7]/20">
-                  {dayCompletedUnits}/{dayTotalUnits} sous-tâches accomplies ({dayPercent}%)
-                </span>
-              )}
-            </p>
-          </div>
-
-          {/* Action buttons & Stats */}
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Quick day-wide shift controls: décaler toute la journée */}
-            {blocksForDay.length > 0 && onUpdateBlock && (
-              <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl p-1.5 flex items-center gap-1 shadow-sm">
-                <span className="text-[10px] font-bold uppercase text-[var(--text-muted)] px-2 hidden sm:inline">
-                  Décalage jour :
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleShiftAllBlocks(-30)}
-                  className="px-2 py-1 rounded-xl text-xs font-mono font-semibold bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition flex items-center gap-0.5 cursor-pointer"
-                  title="Avancer tous les blocs de 30 minutes"
-                >
-                  <Rewind className="w-3 h-3" />
-                  <span>-30m</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleShiftAllBlocks(15)}
-                  className="px-2 py-1 rounded-xl text-xs font-mono font-semibold bg-[var(--bg-surface-elevated)] hover:bg-[#6C5CE7]/20 hover:text-[#6C5CE7] text-[var(--text-secondary)] transition flex items-center gap-0.5 cursor-pointer"
-                  title="Décaler tous les blocs de +15 minutes"
-                >
-                  <span>+15m</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleShiftAllBlocks(30)}
-                  className="px-2.5 py-1 rounded-xl text-xs font-mono font-bold bg-[#6C5CE7]/15 text-[#6C5CE7] hover:bg-[#6C5CE7] hover:text-white transition flex items-center gap-1 cursor-pointer border border-[#6C5CE7]/30"
-                  title="Décaler tout le planning de +30 minutes (en cas d'imprévu)"
-                >
-                  <FastForward className="w-3 h-3" />
-                  <span>+30m</span>
-                </button>
-              </div>
-            )}
-
-            {/* Sélecteur de Mode : Emploi du Temps (Chronologique) vs Piliers Détaillé vs Piliers Macro */}
-            <div
-              id="agenda-mode-switcher"
-              className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl p-1 flex items-center gap-1 shadow-sm"
-            >
-              <button
-                type="button"
-                id="agenda-mode-schedule-btn"
-                onClick={() => handleToggleDisplayMode('schedule')}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  timelineDisplayMode === 'schedule'
-                    ? 'bg-[#6C5CE7] text-white shadow-sm'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
-                }`}
-                title="Emploi du temps (Chronologique) : Déroulé complet de la journée heure par heure"
-              >
-                <Clock className="w-3.5 h-3.5" />
-                <span>Emploi du temps</span>
-              </button>
-              <button
-                type="button"
-                id="agenda-mode-detailed-btn"
-                onClick={() => handleToggleDisplayMode('detailed')}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  timelineDisplayMode === 'detailed'
-                    ? 'bg-[#6C5CE7] text-white shadow-sm'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
-                }`}
-                title="Mode Piliers : Blocs rangés par catégories"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Piliers</span>
-              </button>
-              <button
-                type="button"
-                id="agenda-mode-macro-btn"
-                onClick={() => handleToggleDisplayMode('macro')}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  timelineDisplayMode === 'macro'
-                    ? 'bg-[#6C5CE7] text-white shadow-sm'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
-                }`}
-                title="Mode Macro : Vue épurée"
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Macro</span>
-              </button>
-            </div>
-
-          <button
-            type="button"
-            id="agenda-import-calendar-btn"
-            onClick={() => setIsImportModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] border border-[var(--border-card)] text-[var(--text-primary)] hover:border-[#6C5CE7] text-xs md:text-sm font-bold shadow-sm transition-all active:scale-95 cursor-pointer"
-            title="Importer des événements d'un calendrier Xiaomi, Google ou Apple (.ics)"
-          >
-            <UploadCloud className="w-4 h-4 text-[#6C5CE7]" />
-            <span>Importer (.ics)</span>
-          </button>
-
-          {projects && projects.length > 0 && (
-            <button
-              type="button"
-              id="agenda-open-milestones-drawer-btn"
-              onClick={() => setIsMilestonesDrawerOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] border border-[var(--border-card)] hover:border-[#6C5CE7] text-[var(--text-primary)] text-xs md:text-sm font-bold shadow-sm transition-all active:scale-95 cursor-pointer relative"
-              title="Ouvrir le tiroir des jalons Bento en attente à glisser-déposer sur la timeline"
-            >
-              <Layers className="w-4 h-4 text-[#6C5CE7]" />
-              <span>Jalons Bento</span>
-              {waitingMilestonesCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-extrabold bg-[#6C5CE7] text-white">
-                  {waitingMilestonesCount}
-                </span>
-              )}
-            </button>
-          )}
-
-          {/* Raccourci de Démarrage Rapide : Démarrer maintenant (Spontané) */}
-          {onOpenInstantSessionModal && (
-            <button
-              type="button"
-              id="agenda-instant-session-btn"
-              onClick={onOpenInstantSessionModal}
-              className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#6C5CE7] to-[#00CEC9] text-white text-xs md:text-sm font-extrabold shadow-md shadow-[#6C5CE7]/25 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
-              title={`Démarrer une session spontanée à ${currentTimeString} sans planification préalable`}
-            >
-              <Zap className="w-4 h-4 fill-white" />
-              <span>Démarrer maintenant</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            id="agenda-add-block-btn"
-            onClick={() => onOpenAddModal()}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-[#6C5CE7] hover:bg-[#5b4bc4] text-white text-xs md:text-sm font-bold shadow-md shadow-[#6C5CE7]/20 transition-all active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nouveau Bloc</span>
-          </button>
-        </div>
-      </div>
-
-      {/* BANNIÈRE DE DÉMARRAGE RAPIDE SPONTANÉ (Aujourd'hui) */}
-      {isTodaySelected && (
-        <div className="bg-gradient-to-r from-[#6C5CE7]/10 via-[#00CEC9]/10 to-[var(--bg-surface)] border border-[#6C5CE7]/25 rounded-2xl p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#6C5CE7] to-[#00CEC9] p-[2px] shadow-sm shrink-0 flex items-center justify-center">
-              <div className="w-full h-full bg-[var(--bg-surface)] rounded-[14px] flex items-center justify-center text-[#6C5CE7]">
-                <Zap className="w-4 h-4 fill-current" />
-              </div>
+            <div className="w-11 h-11 rounded-2xl bg-[#6C5CE7]/15 border border-[#6C5CE7]/30 flex items-center justify-center text-[#6C5CE7] shadow-sm shrink-0">
+              <CalendarDays className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm font-extrabold text-[var(--text-primary)]">
-                  Session spontanée à {currentTimeString}
-                </span>
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#55E6C1]/15 text-[#55E6C1] border border-[#55E6C1]/30">
-                  En direct
-                </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)]">
+                  {formattedDateTitle}
+                </h2>
+                {isTodaySelected && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#55E6C1]/15 text-[#55E6C1] border border-[#55E6C1]/30">
+                    Aujourd'hui • {currentTimeString}
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
-                Envie de coder ou d'avancer tout de suite ? Créez un bloc débutant à la minute exacte.
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                {blocksForDay.length === 0
+                  ? 'Aucune activité planifiée pour ce jour précis.'
+                  : `${blocksForDay.length} activité${blocksForDay.length > 1 ? 's' : ''} (${totalPlannedHoursFormatted} planifiées)`}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Boutons d'action pour le jour */}
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={() =>
-                onStartInstantSession?.({
-                  pillarId: 'tech',
-                  durationMinutes: 25,
-                  title: `Code & Dev (${currentTimeString})`,
-                  openInZenFullscreen: false,
-                })
-              }
-              className="px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[#6C5CE7] hover:text-white border border-[var(--border-card)] text-xs font-bold text-[var(--text-primary)] transition shadow-2xs flex items-center gap-1 cursor-pointer"
-              title="Créer et ouvrir immédiatement un bloc Tech / Dev de 25 min à la minute exacte"
+              id="open-day-schedule-btn"
+              onClick={() => setIsDayScheduleOpen(true)}
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#6C5CE7] to-[#8A2BE2] text-white text-xs sm:text-sm font-bold shadow-md shadow-[#8A2BE2]/30 hover:brightness-110 active:scale-95 transition flex items-center gap-2 cursor-pointer"
+              title="Ouvrir l'emploi du temps détaillé du jour dans le volet coulissant"
             >
-              <span>⚡ Tech (25 min)</span>
+              <Clock className="w-4 h-4" />
+              <span>Ouvrir l'Emploi du Temps</span>
+              {blocksForDay.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[11px] font-mono font-extrabold bg-white text-[#6C5CE7]">
+                  {blocksForDay.length}
+                </span>
+              )}
             </button>
 
             <button
               type="button"
-              onClick={() =>
-                onStartInstantSession?.({
-                  pillarId: 'tech',
-                  durationMinutes: 50,
-                  title: `Deep Work Code (${currentTimeString})`,
-                  openInZenFullscreen: false,
-                })
-              }
-              className="px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[#6C5CE7] hover:text-white border border-[var(--border-card)] text-xs font-bold text-[var(--text-primary)] transition shadow-2xs flex items-center gap-1 cursor-pointer"
-              title="Créer et ouvrir immédiatement un bloc Deep Work de 50 min"
+              id="quick-add-for-selected-day-btn"
+              onClick={() => onOpenAddModal(undefined, selectedDateString)}
+              className="px-3.5 py-2.5 rounded-2xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] border border-[var(--border-card)] text-[var(--text-primary)] text-xs sm:text-sm font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Ajouter un bloc sur cette journée"
             >
-              <span>🔥 Deep Work (50 min)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onOpenInstantSessionModal}
-              className="px-3 py-1.5 rounded-xl bg-[#6C5CE7] text-white text-xs font-bold hover:bg-[#5b4bc4] transition shadow-2xs flex items-center gap-1 cursor-pointer"
-              title="Configurer la durée ou le pilier pour démarrer maintenant"
-            >
-              <span>Personnaliser…</span>
-              <ChevronRight className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4 text-[#6C5CE7]" />
+              <span className="hidden sm:inline">Ajouter</span>
             </button>
           </div>
         </div>
-      )}
 
-      {/* Notification Toast for quick shifting */}
-      {shiftFeedback && (
-        <div className="fixed top-6 right-6 z-50 bg-[#2D3436] text-white px-4 py-2.5 rounded-2xl shadow-xl border border-white/10 text-xs font-semibold flex items-center gap-2 animate-bounce">
-          <FastForward className="w-4 h-4 text-[#55E6C1]" />
-          <span>{shiftFeedback}</span>
-        </div>
-      )}
+        {/* Aperçu des activités sous forme de puces cliquables */}
+        {blocksForDay.length > 0 ? (
+          <div className="pt-2 border-t border-[var(--border-card)] flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mr-1">
+              Au programme :
+            </span>
+            {blocksForDay.slice(0, 5).map((block) => {
+              const cat = activeCategories.find((c) => c.id === block.domain);
+              const catColor = cat?.color || '#6C5CE7';
+              return (
+                <button
+                  key={block.id}
+                  type="button"
+                  onClick={() => {
+                    setIsDayScheduleOpen(true);
+                  }}
+                  className="px-2.5 py-1 rounded-xl text-xs border flex items-center gap-1.5 hover:scale-102 transition cursor-pointer shadow-2xs group"
+                  style={{
+                    backgroundColor: `${catColor}12`,
+                    borderColor: `${catColor}35`,
+                  }}
+                  title="Cliquer pour afficher dans l'emploi du temps"
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: catColor }}
+                  />
+                  <span className="font-semibold text-[var(--text-primary)] truncate max-w-[130px] group-hover:text-[#6C5CE7]">
+                    {block.title}
+                  </span>
+                  <span className="text-[10px] font-mono text-[var(--text-secondary)]">
+                    {block.startTime}
+                  </span>
+                </button>
+              );
+            })}
+            {blocksForDay.length > 5 && (
+              <button
+                type="button"
+                onClick={() => setIsDayScheduleOpen(true)}
+                className="text-xs font-semibold text-[#6C5CE7] hover:underline px-1 cursor-pointer"
+              >
+                +{blocksForDay.length - 5} autre(s)…
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="pt-2 border-t border-[var(--border-card)] flex items-center justify-between text-xs text-[var(--text-muted)]">
+            <span>Journée dégagée pour l'exploration libre ou le repos.</span>
+            <button
+              type="button"
+              onClick={() => setIsDayScheduleOpen(true)}
+              className="text-[#6C5CE7] font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <span>Planifier un créneau</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </section>
 
-      {/* Info strip: live time & Firestore status */}
-      <div className="p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-card)] flex items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#55E6C1] opacity-75" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#55E6C1]" />
-          </span>
-          <span className="font-semibold text-[var(--text-primary)]">Heure : {currentTimeString}</span>
-          <span className="text-[var(--text-muted)] hidden sm:inline">
-            • Cloud Firestore connecté (users/{'{userId}'}/timeblocks)
-          </span>
+      {/* 3. BANNIÈRE D'ACTIONS RAPIDES : Importation, Jalons & Session Spontanée */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-card)] text-xs">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            id="agenda-import-btn"
+            onClick={() => setIsImportModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] border border-[var(--border-card)] text-[var(--text-primary)] text-xs font-bold shadow-2xs transition active:scale-95 cursor-pointer"
+            title="Importer un fichier .ics (Xiaomi / Google Agenda)"
+          >
+            <UploadCloud className="w-3.5 h-3.5 text-[#6C5CE7]" />
+            <span>Importer (.ics)</span>
+          </button>
+
+          {projects && projects.length > 0 && waitingMilestonesCount > 0 && (
+            <button
+              type="button"
+              id="agenda-open-milestones-drawer-btn"
+              onClick={() => setIsMilestonesDrawerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] border border-[var(--border-card)] hover:border-[#6C5CE7] text-[var(--text-primary)] text-xs font-bold shadow-2xs transition active:scale-95 cursor-pointer"
+              title="Ouvrir le tiroir des jalons Bento en attente"
+            >
+              <Layers className="w-3.5 h-3.5 text-[#6C5CE7]" />
+              <span>Jalons Bento</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-extrabold bg-[#6C5CE7] text-white">
+                {waitingMilestonesCount}
+              </span>
+            </button>
+          )}
+
+          {onOpenInstantSessionModal && (
+            <button
+              type="button"
+              onClick={onOpenInstantSessionModal}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#6C5CE7]/15 to-[#8A2BE2]/15 text-[#6C5CE7] border border-[#6C5CE7]/30 text-xs font-extrabold hover:bg-[#6C5CE7] hover:text-white transition active:scale-95 cursor-pointer"
+              title="Démarrer une session spontanée maintenant"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>Démarrer maintenant</span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
           {onSeedTemplates && (
             <button
+              type="button"
               onClick={onSeedTemplates}
-              className="text-xs font-semibold text-[#6C5CE7] hover:underline flex items-center gap-1"
+              className="text-xs font-semibold text-[#6C5CE7] hover:underline flex items-center gap-1 cursor-pointer"
             >
               <RotateCcw className="w-3 h-3" />
               <span>Modèles d'exemples</span>
@@ -789,8 +398,9 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           )}
           {blocks.length > 0 && onClearBlocks && (
             <button
+              type="button"
               onClick={onClearBlocks}
-              className="text-[11px] text-[var(--text-muted)] hover:text-[#FF7675] transition-colors"
+              className="text-[11px] text-[var(--text-muted)] hover:text-[#FF7675] transition-colors cursor-pointer"
               title="Vider la collection de test"
             >
               Vider
@@ -799,881 +409,47 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
         </div>
       </div>
 
-      {/* Global empty state banner */}
-      {blocks.length === 0 && (
-        <div className="mb-6 p-6 rounded-3xl bg-[var(--bg-surface)] border border-[var(--border-card)] text-center shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-[#6C5CE7]/10 text-[#6C5CE7] flex items-center justify-center mx-auto mb-3 border border-[#6C5CE7]/20">
-            <Sparkles className="w-6 h-6" />
-          </div>
-          <h3 className="text-base font-bold text-[var(--text-primary)]">Espace personnel prêt</h3>
-          <p className="text-xs text-[var(--text-secondary)] max-w-md mx-auto mt-1 leading-relaxed">
-            Créez vos premiers blocs de temps ou personnalisez vos piliers selon votre équilibre multipotentiel.
-          </p>
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => onOpenAddModal()}
-              className="px-4 py-2 rounded-xl bg-[#6C5CE7] text-white text-xs font-bold shadow-md shadow-[#6C5CE7]/20 hover:bg-[#5b4bc4] transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Créer mon premier bloc</span>
-            </button>
-            {onOpenManagePillars && (
-              <button
-                onClick={onOpenManagePillars}
-                className="px-3.5 py-2 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-[var(--text-primary)] text-xs font-medium hover:border-[var(--border-highlight)] transition"
-              >
-                Gérer les piliers
-              </button>
-            )}
-          </div>
-        </div>
+      {/* 4. LE RADAR D'ÉQUILIBRE MULTIPOTENTIEL (Analytics & Répartition du temps) */}
+      <MultipotentialBalanceRadar
+        blocks={blocks}
+        categories={activeCategories}
+        selectedDate={selectedDate}
+      />
+
+      {/* 5. EXPLORATION DES PILIERS (LUMA STYLE) */}
+      {onOpenManagePillars && (
+        <CategoriesExplorationGrid
+          categories={activeCategories}
+          blocks={blocksForDay}
+          onOpenManagePillars={onOpenManagePillars}
+          onQuickAddBlockForPillar={(catId) => onOpenAddModal(catId, selectedDateString)}
+          onSelectCategory={(catId) => onOpenAddModal(catId, selectedDateString)}
+        />
       )}
 
-      {/* 3.5. RUBAN DES CRÉNEAUX HORAIRES & GLISSER-DÉPOSER DES JALONS */}
-      <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[#6C5CE7]/15 border border-[#6C5CE7]/30 flex items-center justify-center text-[#6C5CE7]">
-              <Clock className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-xs sm:text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <span>Créneaux Horaires de la Journée</span>
-                <span className="text-[10px] font-normal px-2 py-0.5 rounded-md bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] border border-[var(--border-card)]">
-                  Zone de dépôt active
-                </span>
-              </h3>
-              <p className="text-[11px] text-[var(--text-secondary)]">
-                Glissez un jalon Bento directement sur une heure pour planifier 90 min en Deep Work
-              </p>
-            </div>
-          </div>
-
-          {waitingMilestonesCount > 0 && (
-            <button
-              type="button"
-              id="open-drawer-from-strip-btn"
-              onClick={() => setIsMilestonesDrawerOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#6C5CE7]/10 hover:bg-[#6C5CE7] text-[#6C5CE7] hover:text-white border border-[#6C5CE7]/25 text-xs font-bold transition-all cursor-pointer"
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Jalons en attente ({waitingMilestonesCount})</span>
-              <ChevronRight className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-
-        {/* Grille horizontale des créneaux horaires */}
-        <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-15 gap-2 pt-1 overflow-x-auto">
-          {HOURS_TIMELINE.map((hour) => {
-            const [h] = hour.split(':').map(Number);
-            const slotMinutes = h * 60;
-            const coveringBlock = blocksForDay.find(
-              (b) =>
-                slotMinutes >= b.startMinutes &&
-                slotMinutes < b.startMinutes + b.durationMinutes
-            );
-            const isHovered = dragOverHourSlot === hour;
-
-            if (coveringBlock) {
-              const cat = activeCategories.find((c) => c.id === coveringBlock.domain);
-              const catColor = cat?.color || '#6C5CE7';
-
-              return (
-                <button
-                  key={hour}
-                  type="button"
-                  onClick={() => onSelectBlock(coveringBlock.id)}
-                  className="p-2 rounded-xl border text-left transition flex flex-col justify-between h-20 shadow-2xs hover:shadow-xs group cursor-pointer relative overflow-hidden"
-                  style={{
-                    backgroundColor: `${catColor}10`,
-                    borderColor: `${catColor}40`,
-                  }}
-                  title={`Occupé : ${coveringBlock.title} (${coveringBlock.startTime} - ${coveringBlock.endTime})`}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <span className="text-[11px] font-mono font-bold text-[var(--text-primary)]">
-                      {hour}
-                    </span>
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: catColor }}
-                    />
-                  </div>
-                  <span className="text-[10px] font-medium text-[var(--text-secondary)] line-clamp-2 leading-tight group-hover:text-[var(--text-primary)]">
-                    {coveringBlock.title}
-                  </span>
-                </button>
-              );
-            }
-
-            return (
-              <div
-                key={hour}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  if (dragOverHourSlot !== hour) setDragOverHourSlot(hour);
-                }}
-                onDragLeave={() => {
-                  if (dragOverHourSlot === hour) setDragOverHourSlot(null);
-                }}
-                onDrop={(e) => handleDropOnHour(hour, e)}
-                onClick={() => {
-                  if (waitingMilestonesCount > 0) {
-                    setIsMilestonesDrawerOpen(true);
-                  } else {
-                    onOpenAddModal();
-                  }
-                }}
-                className={`p-2 rounded-xl border border-dashed text-left transition-all flex flex-col justify-between h-20 cursor-pointer ${
-                  isHovered
-                    ? 'border-[#6C5CE7] bg-[#6C5CE7]/20 ring-2 ring-[#6C5CE7] scale-102 shadow-md'
-                    : 'border-[var(--border-card)] bg-[var(--bg-surface-elevated)]/60 hover:bg-[var(--bg-surface-elevated)] hover:border-[#6C5CE7]/50'
-                }`}
-                title={`Créneau libre à ${hour}. Glissez un jalon ou cliquez pour planifier.`}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <span
-                    className={`text-[11px] font-mono font-bold ${
-                      isHovered ? 'text-[#A29BFE]' : 'text-[var(--text-muted)]'
-                    }`}
-                  >
-                    {hour}
-                  </span>
-                  <Plus
-                    className={`w-3 h-3 ${
-                      isHovered ? 'text-[#A29BFE]' : 'text-[var(--text-muted)]'
-                    }`}
-                  />
-                </div>
-
-                <div className="text-[10px] text-[var(--text-muted)] leading-tight">
-                  {isHovered ? (
-                    <span className="text-[#A29BFE] font-bold">Déposer ici</span>
-                  ) : (
-                    <span>Libre (90m)</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-        {/* VUE EMPLOI DU TEMPS CHRONOLOGIQUE (HEURE PAR HEURE) */}
-        {timelineDisplayMode === 'schedule' ? (
-          <div className="space-y-4 pt-2">
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-[#6C5CE7]" />
-                <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-                  Déroulement chronologique • {formattedDateTitle}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => onOpenAddModal()}
-                className="px-3 py-1.5 rounded-xl bg-[#6C5CE7]/10 hover:bg-[#6C5CE7]/20 text-[#6C5CE7] text-xs font-bold border border-[#6C5CE7]/30 transition flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Ajouter une activité</span>
-              </button>
-            </div>
-
-            {chronologicalBlocks.length === 0 ? (
-              <div className="p-8 sm:p-10 rounded-3xl bg-[var(--bg-surface)] border border-dashed border-[var(--border-card)] text-center shadow-xs">
-                <div className="w-14 h-14 rounded-2xl bg-[#6C5CE7]/10 text-[#6C5CE7] flex items-center justify-center mx-auto mb-3.5 border border-[#6C5CE7]/20">
-                  <CalendarDays className="w-7 h-7" />
-                </div>
-                <h3 className="text-base sm:text-lg font-bold text-[var(--text-primary)]">
-                  Journée entièrement libre
-                </h3>
-                <p className="text-xs sm:text-sm text-[var(--text-secondary)] max-w-md mx-auto mt-1.5 leading-relaxed">
-                  Aucune activité n'est encore planifiée pour le <strong className="text-[var(--text-primary)] font-semibold">{formattedDateTitle}</strong>. Vous pouvez y déposer un jalon Bento ou planifier un nouveau créneau.
-                </p>
-                <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => onOpenAddModal()}
-                    className="px-4 py-2.5 rounded-xl bg-[#6C5CE7] text-white text-xs sm:text-sm font-bold shadow-md shadow-[#6C5CE7]/25 hover:bg-[#5b4bc4] transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Planifier un premier bloc</span>
-                  </button>
-                  {waitingMilestonesCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setIsMilestonesDrawerOpen(true)}
-                      className="px-4 py-2.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-[var(--text-primary)] text-xs sm:text-sm font-semibold hover:border-[#6C5CE7] transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Layers className="w-4 h-4 text-[#6C5CE7]" />
-                      <span>Ouvrir les Jalons Bento ({waitingMilestonesCount})</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {chronologicalBlocks.map((block, index) => {
-                  const cat = activeCategories.find((c) => c.id === block.domain) || {
-                    id: block.domain,
-                    name: block.domain,
-                    color: '#6C5CE7',
-                    iconName: 'Sparkles',
-                  };
-                  const Icon = getPillarIcon(cat.iconName);
-                  const subtasks = getBlockSubtasks(block);
-                  const completedSubtasks = subtasks.filter((s) => s.completed).length;
-                  const pct = subtasks.length > 0 ? Math.round((completedSubtasks / subtasks.length) * 100) : (block.completed ? 100 : 0);
-                  const isLiveNow = isTodaySelected && currentMinutesFromMidnight >= block.startMinutes && currentMinutesFromMidnight < block.startMinutes + block.durationMinutes;
-
-                  // Detect gap with previous block
-                  const prevBlock = index > 0 ? chronologicalBlocks[index - 1] : null;
-                  const prevEndMinutes = prevBlock ? prevBlock.startMinutes + prevBlock.durationMinutes : null;
-                  const hasGap = prevEndMinutes !== null && block.startMinutes - prevEndMinutes >= 30;
-                  const gapMinutes = hasGap && prevEndMinutes !== null ? block.startMinutes - prevEndMinutes : 0;
-                  const gapHours = Math.floor(gapMinutes / 60);
-                  const gapMinsRemainder = gapMinutes % 60;
-                  const gapString = gapHours > 0 ? (gapMinsRemainder > 0 ? `${gapHours}h${gapMinsRemainder}m` : `${gapHours}h`) : `${gapMinsRemainder}m`;
-
-                  // Linked Project if any
-                  const linkedProject = projects?.find((p) => p.id === block.projectId);
-
-                  return (
-                    <React.Fragment key={block.id}>
-                      {/* Intervalle de temps libre entre deux activités */}
-                      {hasGap && prevEndMinutes !== null && (
-                        <div
-                          onClick={() => onOpenAddModal()}
-                          className="group my-1.5 py-2 px-4 rounded-xl border border-dashed border-[var(--border-card)] hover:border-[#6C5CE7]/60 bg-[var(--bg-surface-elevated)]/40 hover:bg-[#6C5CE7]/5 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xs flex items-center justify-between transition cursor-pointer"
-                          title="Créneau disponible. Cliquez pour planifier."
-                        >
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[#6C5CE7] transition-colors" />
-                            <span>
-                              Temps libre : {minutesToTimeString(prevEndMinutes)} — {block.startTime} ({gapString})
-                            </span>
-                          </div>
-                          <span className="text-[11px] font-semibold text-[#6C5CE7] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                            <Plus className="w-3 h-3" />
-                            <span>Planifier</span>
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Carte Chronologique du Bloc */}
-                      <div
-                        onClick={() => onSelectBlock(block.id)}
-                        className={`group bg-[var(--bg-surface)] border rounded-2xl p-4 sm:p-5 transition-all duration-200 hover:shadow-md relative overflow-hidden cursor-pointer ${
-                          isLiveNow
-                            ? 'border-[#FF7675] ring-2 ring-[#FF7675]/30 shadow-md'
-                            : 'border-[var(--border-card)] hover:border-[var(--border-highlight)]'
-                        }`}
-                      >
-                        {/* Live indicator if active right now */}
-                        {isLiveNow && (
-                          <div className="mb-2.5 flex items-center gap-1.5 text-[10px] font-mono font-bold text-[#FF7675] uppercase tracking-wider">
-                            <span className="w-2 h-2 rounded-full bg-[#FF7675] animate-ping inline-block" />
-                            <span>En cours en ce moment • {currentTimeString}</span>
-                          </div>
-                        )}
-
-                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
-                          {/* Colonne gauche : Horaires & Pilier */}
-                          <div className="flex items-start gap-3">
-                            <div className="flex flex-col items-center justify-center min-w-[76px] py-2 px-2 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-center shrink-0">
-                              <span className="text-xs font-mono font-bold text-[var(--text-primary)]">
-                                {block.startTime}
-                              </span>
-                              <span className="text-[10px] text-[var(--text-muted)] font-mono">
-                                {block.endTime}
-                              </span>
-                              <span
-                                className="mt-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-extrabold"
-                                style={{
-                                  backgroundColor: `${cat.color}15`,
-                                  color: cat.color,
-                                }}
-                              >
-                                {block.durationMinutes}m
-                              </span>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              {/* Badges Pilier + Projet */}
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span
-                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border"
-                                  style={{
-                                    backgroundColor: `${cat.color}15`,
-                                    borderColor: `${cat.color}35`,
-                                    color: cat.color,
-                                  }}
-                                >
-                                  <Icon className="w-3 h-3" />
-                                  <span>{cat.name}</span>
-                                </span>
-
-                                {linkedProject && (
-                                  <span
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] border border-[var(--border-card)]"
-                                    title={`Projet : ${linkedProject.title}`}
-                                  >
-                                    <FolderOpen className="w-3 h-3 text-[#6C5CE7]" />
-                                    <span className="truncate max-w-[200px]">{linkedProject.title}</span>
-                                  </span>
-                                )}
-
-                                {block.isFixedConstraint && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--text-muted)] bg-[var(--bg-surface-elevated)] px-2 py-0.5 rounded-full border border-[var(--border-card)]">
-                                    <Lock className="w-2.5 h-2.5 text-[#E17055]" />
-                                    <span>Contrainte</span>
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Titre & Objectif */}
-                              <h3 className="text-base font-bold text-[var(--text-primary)] group-hover:text-[#6C5CE7] transition-colors leading-snug">
-                                {block.title}
-                              </h3>
-
-                              {block.globalObjective && (
-                                <p className="text-xs text-[var(--text-secondary)] leading-relaxed line-clamp-2">
-                                  {block.globalObjective}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Colonne droite : Actions & Shift rapide */}
-                          <div
-                            className="flex items-center gap-2 shrink-0 self-start md:self-auto"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {/* Shift buttons */}
-                            {onUpdateBlock && (
-                              <div className="flex items-center gap-1 bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-xl p-0.5">
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleShiftBlock(block, -15, e)}
-                                  className="px-1.5 py-0.5 rounded-lg text-[10px] font-mono font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition cursor-pointer"
-                                  title="Avancer de 15 minutes (-15m)"
-                                >
-                                  -15m
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleShiftBlock(block, 15, e)}
-                                  className="px-1.5 py-0.5 rounded-lg text-[10px] font-mono font-semibold text-[var(--text-secondary)] hover:text-[#6C5CE7] hover:bg-[#6C5CE7]/10 transition cursor-pointer"
-                                  title="Décaler de 15 minutes (+15m)"
-                                >
-                                  +15m
-                                </button>
-                              </div>
-                            )}
-
-                            <button
-                              type="button"
-                              onClick={() => onSelectBlock(block.id)}
-                              className="px-3 py-1.5 rounded-xl bg-[#6C5CE7] hover:bg-[#5b4bc4] text-white text-xs font-bold shadow-sm transition active:scale-95 flex items-center gap-1 cursor-pointer"
-                            >
-                              <span>Ouvrir</span>
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Sous-tâches interactives cochables directement depuis l'emploi du temps */}
-                        {subtasks.length > 0 && (
-                          <div
-                            className="mt-3.5 pt-3 border-t border-[var(--border-card)] space-y-2"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <div className="flex items-center justify-between text-xs text-[var(--text-secondary)]">
-                              <span className="font-semibold flex items-center gap-1.5">
-                                <ListTodo className="w-3.5 h-3.5 text-[#6C5CE7]" />
-                                <span>Étapes & Jalons ({completedSubtasks}/{subtasks.length})</span>
-                              </span>
-                              <span className="font-mono text-[11px] font-bold text-[var(--text-secondary)]">
-                                {pct}%
-                              </span>
-                            </div>
-
-                            {/* Barre de progression */}
-                            <div className="w-full h-1.5 bg-[var(--border-card)] rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full transition-all duration-300"
-                                style={{
-                                  width: `${pct}%`,
-                                  backgroundColor: cat.color,
-                                }}
-                              />
-                            </div>
-
-                            {/* Liste des cases à cocher en direct */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
-                              {subtasks.map((st) => (
-                                <button
-                                  key={st.id}
-                                  type="button"
-                                  onClick={(e) => handleToggleSubtask(block, st.id, e)}
-                                  className={`flex items-start gap-2 p-2 rounded-xl text-left text-xs transition cursor-pointer border ${
-                                    st.completed
-                                      ? 'bg-[var(--bg-surface-elevated)]/40 border-[var(--border-card)] text-[var(--text-muted)] line-through'
-                                      : 'bg-[var(--bg-surface-elevated)] border-[var(--border-card)] text-[var(--text-primary)] hover:border-[#6C5CE7]/40'
-                                  }`}
-                                >
-                                  <div
-                                    className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition ${
-                                      st.completed
-                                        ? 'bg-[#55E6C1] border-[#55E6C1] text-[#2D3436]'
-                                        : 'border-[var(--border-card)] bg-[var(--bg-surface)] hover:border-[#6C5CE7]'
-                                    }`}
-                                  >
-                                    {st.completed && <Check className="w-3 h-3 stroke-[3]" />}
-                                  </div>
-                                  <span className="leading-snug">{st.text}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        ) : (
-          /* 5. BLOCS D'ACTIVITÉS RANGÉS PAR PILIERS PERSONNALISÉS (Modes Détaillé / Macro) */
-          <div className="space-y-6">
-            {activeCategories.map((cat) => {
-              const domainBlocks = categorizedBlocks[cat.id] || [];
-              const Icon = getPillarIcon(cat.iconName);
-
-              return (
-                <section
-                  key={cat.id}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    if (dragOverPillarId !== cat.id) setDragOverPillarId(cat.id);
-                  }}
-                  onDragLeave={() => {
-                    if (dragOverPillarId === cat.id) setDragOverPillarId(null);
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setDragOverPillarId(null);
-                setDragOverBlockId(null);
-
-                // 1. Vérifier si c'est un Jalon Bento
-                const milestoneRaw = e.dataTransfer.getData('application/spectrum-milestone');
-                if (milestoneRaw) {
-                  try {
-                    const milestoneData: MilestoneDragData = JSON.parse(milestoneRaw);
-                    handleScheduleMilestoneFromDrawer(
-                      { ...milestoneData, domain: cat.id },
-                      undefined,
-                      90
-                    );
-                    setDraggedMilestone(null);
-                    return;
-                  } catch (_) {}
-                }
-
-                // 2. Sinon déplacer un bloc existant entre piliers
-                const droppedBlockId = e.dataTransfer.getData('text/plain') || draggedBlockId;
-                if (!droppedBlockId || !onUpdateBlock) return;
-                const targetBlock = blocks.find((b) => b.id === droppedBlockId);
-                if (targetBlock && targetBlock.domain !== cat.id) {
-                  onUpdateBlock({
-                    ...targetBlock,
-                    domain: cat.id as DomainId,
-                  });
-                  showNotification(`Bloc transféré vers le pilier « ${cat.name} »`);
-                }
-                setDraggedBlockId(null);
-              }}
-              className={`bg-[var(--bg-surface)] border rounded-2xl md:rounded-3xl p-4 sm:p-5 shadow-sm relative overflow-hidden transition-all ${
-                dragOverPillarId === cat.id
-                  ? 'border-[#6C5CE7] ring-2 ring-[#6C5CE7]/30 bg-[#6C5CE7]/5'
-                  : 'border-[var(--border-card)]'
-              }`}
-            >
-              {/* Feedback visuel lors du survol d'un jalon au-dessus d'un pilier */}
-              {dragOverPillarId === cat.id && draggedMilestone && (
-                <div className="mb-3 p-2.5 rounded-2xl bg-[#6C5CE7]/20 border border-[#6C5CE7]/40 text-[#A29BFE] text-xs font-bold flex items-center justify-center gap-2 animate-pulse">
-                  <Sparkles className="w-4 h-4" />
-                  <span>
-                    Déposer ici pour créer un bloc dans « {cat.name} » : {draggedMilestone.title}
-                  </span>
-                </div>
-              )}
-              {/* Category Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-[var(--border-card)] mb-4">
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-9 h-9 rounded-2xl flex items-center justify-center shadow-sm"
-                    style={{
-                      backgroundColor: `${cat.color}20`,
-                      color: cat.color,
-                    }}
-                  >
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-base font-bold text-[var(--text-primary)] tracking-tight">
-                        {cat.name}
-                      </h2>
-                      <span
-                        className="px-2 py-0.5 rounded-full text-[11px] font-bold border font-mono"
-                        style={{
-                          backgroundColor: `${cat.color}15`,
-                          borderColor: `${cat.color}35`,
-                          color: cat.color,
-                        }}
-                      >
-                        {domainBlocks.length} bloc(s)
-                      </span>
-                    </div>
-                    {cat.label && (
-                      <p className="text-[11px] text-[var(--text-secondary)]">{cat.label}</p>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => onOpenAddModal(cat.id)}
-                  className="p-1.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition-colors border border-transparent hover:border-[var(--border-card)] cursor-pointer"
-                  title={`Ajouter un bloc ${cat.name}`}
-                  aria-label={`Ajouter un bloc ${cat.name}`}
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Blocks inside this category */}
-              {domainBlocks.length === 0 ? (
-                <div className="py-4 px-4 text-center rounded-2xl bg-[var(--bg-surface-elevated)]/60 border border-dashed border-[var(--border-card)] flex flex-col items-center justify-center">
-                  <p className="text-xs text-[var(--text-secondary)] italic">
-                    Aucune activité programmée pour ce jour.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => onOpenAddModal(cat.id)}
-                    className="mt-2 text-[11px] font-semibold text-[#6C5CE7] hover:underline transition-colors cursor-pointer"
-                  >
-                    + Planifier une session pour {cat.name}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {domainBlocks.map((block) => {
-                    const blockSubtasks = getBlockSubtasks(block);
-                    const total = blockSubtasks.length;
-                    const done = blockSubtasks.filter((i) => i.completed).length;
-                    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-
-                    const isLiveNow =
-                      isTodaySelected &&
-                      currentMinutesFromMidnight >= block.startMinutes &&
-                      currentMinutesFromMidnight <= block.startMinutes + block.durationMinutes;
-
-                    const isBeingDragged = draggedBlockId === block.id;
-
-                    return (
-                      <div
-                        key={block.id}
-                        draggable
-                        onDragStart={(e) => {
-                          setDraggedBlockId(block.id);
-                          e.dataTransfer.setData('text/plain', block.id);
-                          e.dataTransfer.effectAllowed = 'move';
-                        }}
-                        onDragEnd={() => {
-                          setDraggedBlockId(null);
-                          setDragOverPillarId(null);
-                          setDragOverBlockId(null);
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          if (draggedBlockId && draggedBlockId !== block.id) {
-                            setDragOverBlockId(block.id);
-                          }
-                        }}
-                        onDragLeave={() => {
-                          if (dragOverBlockId === block.id) {
-                            setDragOverBlockId(null);
-                          }
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const sourceId = e.dataTransfer.getData('text/plain') || draggedBlockId;
-                          setDragOverBlockId(null);
-                          setDragOverPillarId(null);
-                          setDraggedBlockId(null);
-
-                          if (!sourceId || sourceId === block.id || !onUpdateBlock) return;
-                          const sourceBlock = blocks.find((b) => b.id === sourceId);
-                          if (!sourceBlock) return;
-
-                          const targetStart = block.startMinutes;
-                          const targetDomain = cat.id as DomainId;
-
-                          onUpdateBlock({
-                            ...sourceBlock,
-                            domain: targetDomain,
-                            startMinutes: targetStart,
-                            startTime: block.startTime,
-                            endTime: minutesToTimeString(targetStart + sourceBlock.durationMinutes),
-                          });
-                          showNotification(`« ${sourceBlock.title} » repositionné à ${block.startTime}`);
-                        }}
-                        onClick={() => onSelectBlock(block.id)}
-                        className={`group cursor-pointer bg-[var(--bg-surface-elevated)] border rounded-2xl p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md relative overflow-hidden ${
-                          isBeingDragged
-                            ? 'opacity-40 border-dashed border-[#6C5CE7]'
-                            : dragOverBlockId === block.id
-                            ? 'border-[#6C5CE7] ring-2 ring-[#6C5CE7]/30 scale-[1.01]'
-                            : isLiveNow
-                            ? 'border-[#FF7675] ring-2 ring-[#FF7675]/30'
-                            : 'border-[var(--border-card)] hover:border-[var(--border-highlight)]'
-                        }`}
-                      >
-                        {/* Live active beacon */}
-                        {isLiveNow && (
-                          <div className="mb-2 flex items-center gap-1.5 text-[10px] font-mono font-bold text-[#FF7675] uppercase">
-                            <span className="w-2 h-2 rounded-full bg-[#FF7675] animate-ping inline-block" />
-                            <span>En ce moment • {currentTimeString}</span>
-                          </div>
-                        )}
-
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
-                              title="Glisser-déposer pour réordonner ou changer de pilier"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <GripVertical className="w-4 h-4" />
-                            </span>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="text-base font-bold text-[var(--text-primary)] group-hover:text-[#6C5CE7] transition-colors flex items-center gap-2">
-                                {timelineDisplayMode === 'macro' && !block.isFixedConstraint ? (
-                                  <>
-                                    <span
-                                      className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
-                                      style={{ backgroundColor: cat.color }}
-                                    />
-                                    <span>{cat.name}</span>
-                                  </>
-                                ) : (
-                                  <span>{block.title}</span>
-                                )}
-                              </h3>
-
-                              {timelineDisplayMode === 'macro' && !block.isFixedConstraint && (
-                                <span
-                                  className="text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider inline-flex items-center gap-1"
-                                  style={{
-                                    color: cat.color,
-                                    backgroundColor: `${cat.color}15`,
-                                    borderColor: `${cat.color}35`,
-                                  }}
-                                >
-                                  <Sparkles className="w-2.5 h-2.5" />
-                                  <span>Créneau Sanctuarisé</span>
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Time summary + Quick shift buttons */}
-                          <div
-                            className="flex items-center gap-1.5 shrink-0"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <span className="text-xs font-mono font-semibold text-[var(--text-secondary)] flex items-center gap-1 mr-1">
-                              <Clock className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                              {block.startTime} — {block.endTime} ({block.durationMinutes}m)
-                            </span>
-
-                            {/* Quick individual shift controls */}
-                            {onUpdateBlock && (
-                              <div className="flex items-center gap-1 bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-xl p-0.5">
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleShiftBlock(block, -15, e)}
-                                  className="px-1.5 py-0.5 rounded-lg text-[10px] font-mono font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition"
-                                  title="Avancer de 15 minutes (-15m)"
-                                >
-                                  -15
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleShiftBlock(block, 15, e)}
-                                  className="px-1.5 py-0.5 rounded-lg text-[10px] font-mono font-semibold text-[var(--text-secondary)] hover:text-[#6C5CE7] hover:bg-[#6C5CE7]/10 transition"
-                                  title="Décaler de 15 minutes (+15m)"
-                                >
-                                  +15
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleShiftBlock(block, 30, e)}
-                                  className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-[#6C5CE7]/15 text-[#6C5CE7] hover:bg-[#6C5CE7] hover:text-white transition flex items-center gap-0.5"
-                                  title="Décaler de 30 minutes (+30m)"
-                                >
-                                  <FastForward className="w-2.5 h-2.5" />
-                                  <span>+30m</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Mode Macro : Indication discrète et invitation au flow sans surcharge visuelle */}
-                        {timelineDisplayMode === 'macro' && !block.isFixedConstraint ? (
-                          <div className="mt-1 pl-6 flex items-center justify-between text-xs text-[var(--text-secondary)]">
-                            <span className="italic text-[var(--text-muted)] flex items-center gap-1.5">
-                              <span>Objectif masqué (esprit libre) • Cliquez pour ouvrir la Fiche</span>
-                            </span>
-                            <span className="text-[11px] font-semibold text-[#6C5CE7] group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
-                              <span>Fiche & Flow</span>
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </span>
-                          </div>
-                        ) : (
-                          block.globalObjective && (
-                            <p className="text-xs text-[var(--text-secondary)] line-clamp-2 leading-relaxed pl-6">
-                              {block.globalObjective}
-                            </p>
-                          )
-                        )}
-
-                        {/* Checklist % indicator or Zen completion indicator or Fixed constraint */}
-                        <div className="mt-3 pt-2.5 border-t border-[var(--border-card)] flex flex-wrap items-center justify-between gap-2">
-                          {block.isFixedConstraint ? (
-                            <>
-                              <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
-                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--text-muted)] bg-[var(--bg-surface)] px-2.5 py-0.5 rounded-lg border border-[var(--border-card)]">
-                                  <Lock className="w-3 h-3 text-[#E17055]" />
-                                  <span>Contrainte Fixe ({block.sourceCalendar || 'Agenda externe'})</span>
-                                </span>
-                                {block.location && (
-                                  <span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-muted)]">
-                                    <MapPin className="w-3 h-3 text-[#6C5CE7]" />
-                                    <span className="truncate max-w-[160px]">{block.location}</span>
-                                  </span>
-                                )}
-                              </div>
-
-                              {onUpdateBlock && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onUpdateBlock({
-                                      ...block,
-                                      isFixedConstraint: false,
-                                      globalObjective:
-                                        block.globalObjective || `Session de travail : ${block.title}`,
-                                      subtasks: [
-                                        {
-                                          id: `st-${Date.now()}`,
-                                          text: 'Objectif de la session',
-                                          completed: false,
-                                        },
-                                      ],
-                                    });
-                                    showNotification('Converti en Bloc d’Activité Spectrum actif !');
-                                  }}
-                                  className="px-2.5 py-1 rounded-xl bg-[#6C5CE7]/15 hover:bg-[#6C5CE7] text-[#6C5CE7] hover:text-white border border-[#6C5CE7]/30 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
-                                  title="Convertir en Bloc d'Activité Spectrum actif avec Fiche & Flow"
-                                >
-                                  <Zap className="w-3 h-3" />
-                                  <span>Convertir en Bloc Actif</span>
-                                </button>
-                              )}
-                            </>
-                          ) : timelineDisplayMode === 'macro' ? (
-                            <>
-                              <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                                <span className="text-[11px] text-[var(--text-muted)]">
-                                  {total > 0 ? `${total} étape${total > 1 ? 's' : ''} planifiée${total > 1 ? 's' : ''}` : 'Mode Immersion pure'}
-                                </span>
-                                {done > 0 && (
-                                  <span className="text-[10px] font-bold text-[#55E6C1] bg-[#55E6C1]/10 px-2 py-0.5 rounded-full border border-[#55E6C1]/30">
-                                    {done}/{total} complétée{done > 1 ? 's' : ''}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1 text-[11px] font-semibold text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors">
-                                <span>Lancer la session</span>
-                                <ChevronRight className="w-3 h-3 text-[#6C5CE7]" />
-                              </div>
-                            </>
-                          ) : total > 0 ? (
-                            <>
-                              <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                                <CheckCircle2 className="w-3.5 h-3.5" style={{ color: cat.color }} />
-                                <span>
-                                  {done}/{total} étape{total > 1 ? 's' : ''}
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-2 flex-1 max-w-[180px]">
-                                <div className="w-full h-1.5 bg-[var(--border-card)] rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full rounded-full transition-all duration-300"
-                                    style={{
-                                      width: `${pct}%`,
-                                      backgroundColor: cat.color,
-                                    }}
-                                  />
-                                </div>
-                                <span className="text-[11px] font-mono font-bold text-[var(--text-secondary)]">
-                                  {pct}%
-                                </span>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                                <Sparkles className="w-3.5 h-3.5" style={{ color: cat.color }} />
-                                <span className="font-medium text-[11px]">Mode Focus Immersion</span>
-                              </div>
-
-                              <div className="flex items-center gap-1.5">
-                                {block.completed ? (
-                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#55E6C1] bg-[#55E6C1]/10 px-2 py-0.5 rounded-full border border-[#55E6C1]/30">
-                                    <Check className="w-3 h-3 stroke-[3]" />
-                                    Accompli
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--text-muted)] bg-[var(--bg-surface)] px-2 py-0.5 rounded-full border border-[var(--border-card)]">
-                                    Prêt à lancer
-                                  </span>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          );
-        })}
-      </div>
-    )}
-  </div>
+      {/* 6. VOLET COULISSANT / BOTTOM SHEET DE L'EMPLOI DU TEMPS (OPTION 1) */}
+      <DayScheduleSheet
+        isOpen={isDayScheduleOpen}
+        onClose={() => setIsDayScheduleOpen(false)}
+        selectedDate={selectedDate}
+        onSelectDate={onSelectDate}
+        blocks={blocks}
+        categories={activeCategories}
+        onSelectBlock={(bId) => {
+          setIsDayScheduleOpen(false);
+          onSelectBlock(bId);
+        }}
+        onUpdateBlock={onUpdateBlock}
+        onAddBlock={onAddBlock}
+        onShiftDayBlocks={onShiftDayBlocks}
+        onOpenAddModal={(pId, dStr) => {
+          onOpenAddModal(pId, dStr || selectedDateString);
+        }}
+        onStartInstantSession={onStartInstantSession}
+        onOpenInstantSessionModal={onOpenInstantSessionModal}
+        waitingMilestonesCount={waitingMilestonesCount}
+        onOpenMilestonesDrawer={() => setIsMilestonesDrawerOpen(true)}
+      />
 
       {/* Modal d'importation de calendrier Xiaomi / Google (.ics) */}
       <ImportCalendarModal
@@ -1685,33 +461,10 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           if (onImportBlocks) {
             onImportBlocks(newBlocks);
           }
-          showNotification(`${newBlocks.length} événement(s) importé(s) dans votre Agenda !`);
         }}
       />
 
-      {/* Bouton Flottant d'accès rapide aux Jalons Bento */}
-      {projects && projects.length > 0 && waitingMilestonesCount > 0 && !isMilestonesDrawerOpen && (
-        <aside
-          id="floating-milestones-drawer-trigger"
-          aria-label="Raccourci des jalons Bento"
-          className="fixed bottom-20 md:bottom-8 right-4 md:right-8 z-30 flex items-center"
-        >
-          <button
-            type="button"
-            onClick={() => setIsMilestonesDrawerOpen(true)}
-            className="px-3.5 py-2.5 rounded-full bg-[#6C5CE7] hover:bg-[#5b4bc4] text-white shadow-xl shadow-[#6C5CE7]/30 border border-white/20 text-xs md:text-sm font-bold flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
-            title="Ouvrir les Jalons Bento en attente"
-          >
-            <Layers className="w-4 h-4" />
-            <span className="hidden sm:inline">Jalons Bento</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[11px] font-mono font-extrabold bg-white text-[#6C5CE7]">
-              {waitingMilestonesCount}
-            </span>
-          </button>
-        </aside>
-      )}
-
-      {/* 5. TIROIR LATÉRAL DES JALONS BENTO EN ATTENTE */}
+      {/* Tiroir latéral des jalons Bento en attente */}
       <WaitingMilestonesDrawer
         isOpen={isMilestonesDrawerOpen}
         onClose={() => setIsMilestonesDrawerOpen(false)}
