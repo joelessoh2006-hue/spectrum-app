@@ -1,37 +1,49 @@
 @import "tailwindcss";
 
 :root {
-  --bg-app: #121214;
-  --bg-surface: #18181B;
-  --bg-surface-elevated: #1E1E24;
-  --bg-subtle: #121214;
-  --border-app: #27272A;
-  --border-card: #2E2E38;
-  --border-highlight: #3E3E4C;
-  --text-primary: #EDEDED;
-  --text-secondary: #A0A0AB;
-  --text-muted: #71717A;
-  --header-bg: rgba(20, 20, 23, 0.85);
-  --nav-bg: rgba(20, 20, 23, 0.88);
-  --input-bg: #121214;
-  --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+  /* Deep Amethyst Dark Theme (Default) */
+  --bg-app: #080911; /* Sombre profond améthyste / zinc-950 */
+  --bg-surface: #12131F; /* Cartes épurées Deep Amethyst */
+  --bg-surface-elevated: #1A1B2E; /* Surfaces surélevées popovers/modals */
+  --bg-subtle: #0D0E1A;
+  --border-app: rgba(139, 92, 246, 0.12);
+  --border-card: rgba(139, 92, 246, 0.15); /* border-violet-500/15 */
+  --border-highlight: rgba(167, 139, 250, 0.35);
+  --border-neon: rgba(138, 43, 226, 0.5);
+  --text-primary: #F4F4F8;
+  --text-secondary: #A2A3BC;
+  --text-muted: #6B6C86;
+  --header-bg: rgba(8, 9, 17, 0.85);
+  --nav-bg: rgba(8, 9, 17, 0.90);
+  --input-bg: #0D0E1A;
+  --card-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.65), 0 0 1px 1px rgba(139, 92, 246, 0.08);
+  --neon-glow: 0 0 20px -3px rgba(108, 92, 231, 0.4);
+  --neon-glow-strong: 0 0 32px -2px rgba(138, 43, 226, 0.55);
+  --accent-violet: #6C5CE7;
+  --accent-neon: #8A2BE2;
 }
 
 html.light {
-  --bg-app: #F6F7F9;
-  --bg-surface: #FFFFFF;
-  --bg-surface-elevated: #F8F9FA;
-  --bg-subtle: #EDF0F3;
-  --border-app: #E2E8F0;
-  --border-card: #E4E7EB;
-  --border-highlight: #CBD5E1;
-  --text-primary: #0F172A;
-  --text-secondary: #475569;
-  --text-muted: #94A3B8;
-  --header-bg: rgba(255, 255, 255, 0.85);
-  --nav-bg: rgba(255, 255, 255, 0.88);
-  --input-bg: #F8F9FA;
-  --card-shadow: 0 2px 14px -2px rgba(15, 23, 42, 0.05);
+  /* Mode Clair Pastel Doux */
+  --bg-app: #F7F7FD; /* Arrière-plan pastel doux avec subtile touche lilas */
+  --bg-surface: #FFFFFF; /* Cartes épurées blanches */
+  --bg-surface-elevated: #F1F1FB; /* Surfaces surélevées pastel */
+  --bg-subtle: #ECECF8;
+  --border-app: rgba(139, 92, 246, 0.12);
+  --border-card: rgba(139, 92, 246, 0.15); /* border-violet-500/15 */
+  --border-highlight: rgba(108, 92, 231, 0.35);
+  --border-neon: rgba(138, 43, 226, 0.4);
+  --text-primary: #121124;
+  --text-secondary: #585770;
+  --text-muted: #8E8D9F;
+  --header-bg: rgba(247, 247, 253, 0.85);
+  --nav-bg: rgba(247, 247, 253, 0.92);
+  --input-bg: #FFFFFF;
+  --card-shadow: 0 4px 20px -2px rgba(108, 92, 231, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --neon-glow: 0 4px 18px -2px rgba(108, 92, 231, 0.25);
+  --neon-glow-strong: 0 6px 24px -2px rgba(138, 43, 226, 0.35);
+  --accent-violet: #6C5CE7;
+  --accent-neon: #8A2BE2;
 }
 
 body {
@@ -41,17 +53,34 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Luma Card Styles */
+/* Deep Amethyst & Luma Card Styles */
+.amethyst-card,
 .luma-card {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-card);
   box-shadow: var(--card-shadow);
-  border-radius: 1.25rem;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 1.5rem; /* rounded-3xl */
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.amethyst-card:hover,
 .luma-card:hover {
   border-color: var(--border-highlight);
+  box-shadow: var(--card-shadow), 0 0 20px -4px rgba(108, 92, 231, 0.25);
+}
+
+/* Neon Glow Accents (#6C5CE7 / #8A2BE2) */
+.neon-glow {
+  box-shadow: var(--neon-glow);
+}
+
+.neon-glow-amethyst {
+  box-shadow: var(--neon-glow-strong);
+}
+
+.neon-border {
+  border-color: var(--border-neon);
+  box-shadow: 0 0 16px -2px rgba(108, 92, 231, 0.3);
 }
 
 /* Custom Scrollbars */
@@ -63,10 +92,10 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(140, 140, 160, 0.2);
+  background: rgba(139, 92, 246, 0.2);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(140, 140, 160, 0.35);
+  background: rgba(139, 92, 246, 0.4);
 }
 

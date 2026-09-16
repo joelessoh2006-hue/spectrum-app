@@ -1048,7 +1048,7 @@ export default function App() {
               onClick={() => setCurrentView('agenda')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                 currentView === 'agenda'
-                  ? 'bg-[#6C5CE7] text-white shadow-sm'
+                  ? 'bg-gradient-to-r from-[#6C5CE7] to-[#8A2BE2] text-white shadow-md shadow-[#8A2BE2]/30'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
               }`}
             >
@@ -1061,7 +1061,7 @@ export default function App() {
               onClick={() => setCurrentView('bento')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                 currentView === 'bento'
-                  ? 'bg-[#6C5CE7] text-white shadow-sm'
+                  ? 'bg-gradient-to-r from-[#6C5CE7] to-[#8A2BE2] text-white shadow-md shadow-[#8A2BE2]/30'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
               }`}
             >
@@ -1074,7 +1074,7 @@ export default function App() {
               onClick={() => setCurrentView('activity')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                 currentView === 'activity'
-                  ? 'bg-[#6C5CE7] text-white shadow-sm'
+                  ? 'bg-gradient-to-r from-[#6C5CE7] to-[#8A2BE2] text-white shadow-md shadow-[#8A2BE2]/30'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
               }`}
             >
@@ -1087,7 +1087,7 @@ export default function App() {
               onClick={() => setCurrentView('code')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                 currentView === 'code'
-                  ? 'bg-[#6C5CE7] text-white shadow-sm'
+                  ? 'bg-gradient-to-r from-[#6C5CE7] to-[#8A2BE2] text-white shadow-md shadow-[#8A2BE2]/30'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)]'
               }`}
             >

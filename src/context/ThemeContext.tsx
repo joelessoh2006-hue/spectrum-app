@@ -42,7 +42,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Update meta theme-color for iOS status bar & Chrome PWA
     const metaTheme = document.querySelector('meta[name="theme-color"]');
     if (metaTheme) {
-      metaTheme.setAttribute('content', theme === 'dark' ? '#121214' : '#F8F9FA');
+      metaTheme.setAttribute('content', theme === 'dark' ? '#080911' : '#F7F7FD');
     }
   }, [theme]);
 

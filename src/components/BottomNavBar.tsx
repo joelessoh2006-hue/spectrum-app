@@ -65,7 +65,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
           <button
             id="mobile-quick-add-btn"
             onClick={onOpenAddModal}
-            className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#6C5CE7] to-[#00CEC9] text-white flex items-center justify-center shadow-lg shadow-[#6C5CE7]/35 hover:scale-105 active:scale-95 transition-transform border-2 border-[var(--bg-surface)]"
+            className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#6C5CE7] to-[#8A2BE2] text-white flex items-center justify-center shadow-lg shadow-[#8A2BE2]/40 hover:scale-105 active:scale-95 transition-transform border-2 border-[var(--bg-surface)]"
             title="Ajouter un bloc de temps ou un projet"
             aria-label="Ajouter"
           >

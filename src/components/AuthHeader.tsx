@@ -10,13 +10,11 @@ import {
   ChevronDown,
   User as UserIcon,
   ShieldCheck,
-  Sun,
-  Moon,
   Layers,
   Zap,
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
-import { useTheme } from '../context/ThemeContext';
+import { ThemePillToggle } from './ThemePillToggle';
 import { NotificationSettingsPopover } from './NotificationSettingsPopover';
 import { TimeBlock, DomainConfig } from '../types';
 
@@ -52,7 +50,6 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
   onSelectBlock,
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const { theme, toggleTheme, isDark } = useTheme();
 
   return (
     <header className="border-b border-[var(--border-app)] bg-[var(--header-bg)] backdrop-blur-xl sticky top-0 z-30 px-3 sm:px-6 py-2.5 transition-colors">
@@ -101,20 +98,8 @@ export const AuthHeader: React.FC<AuthHeaderProps> = ({
 
         {/* Header Right Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Light / Dark Mode Toggle Button */}
-          <button
-            id="theme-toggle-button"
-            onClick={toggleTheme}
-            className="w-8 h-8 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-highlight)] flex items-center justify-center transition active:scale-95 shadow-sm"
-            title={isDark ? 'Passer au mode clair (Luma App)' : 'Passer au mode sombre'}
-            aria-label="Basculer thème"
-          >
-            {isDark ? (
-              <Sun className="w-4 h-4 text-[#FDCB6E] transition-transform hover:rotate-45" />
-            ) : (
-              <Moon className="w-4 h-4 text-[#6C5CE7] transition-transform hover:-rotate-12" />
-            )}
-          </button>
+          {/* Sélecteur de Thème Pilule Ergonomique (Deep Amethyst & Clair Pastel) */}
+          <ThemePillToggle />
 
           {/* Centre des Notifications et Alertes */}
           <NotificationSettingsPopover
