@@ -302,8 +302,25 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
               Au programme :
             </span>
             {blocksForDay.slice(0, 5).map((block) => {
+              const titleLower = block.title.toLowerCase();
+              const isBirthday =
+                titleLower.includes('birthday') ||
+                titleLower.includes('anniversaire') ||
+                titleLower.includes('anniv') ||
+                titleLower.includes('naissance');
+              const isAllDay =
+                Boolean(block.isAllDay) ||
+                block.startTime === 'Toute la journée' ||
+                block.durationMinutes >= 1440 ||
+                (isBirthday && (block.startTime === '09:00' || block.startTime === '00:00'));
+
               const cat = activeCategories.find((c) => c.id === block.domain);
-              const catColor = cat?.color || '#6C5CE7';
+              const catColor = block.isFixedConstraint
+                ? isBirthday
+                  ? '#EC4899'
+                  : '#F59E0B'
+                : cat?.color || '#6C5CE7';
+
               return (
                 <button
                   key={block.id}
@@ -323,10 +340,10 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
                     style={{ backgroundColor: catColor }}
                   />
                   <span className="font-semibold text-[var(--text-primary)] truncate max-w-[130px] group-hover:text-[#6C5CE7]">
-                    {block.title}
+                    {isBirthday ? `🎂 ${block.title}` : block.title}
                   </span>
                   <span className="text-[10px] font-mono text-[var(--text-secondary)]">
-                    {block.startTime}
+                    {isAllDay ? 'Journée' : block.startTime}
                   </span>
                 </button>
               );

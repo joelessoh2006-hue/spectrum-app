@@ -15,6 +15,7 @@ import {
   Clock,
   Calendar,
   Sparkles,
+  Lock,
   Save,
   Check,
   RotateCcw,
@@ -101,6 +102,18 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
 
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
+
+  const titleLower = (block.title || '').toLowerCase();
+  const isBirthday =
+    titleLower.includes('birthday') ||
+    titleLower.includes('anniversaire') ||
+    titleLower.includes('anniv') ||
+    titleLower.includes('naissance');
+  const isAllDay =
+    Boolean(block.isAllDay) ||
+    block.startTime === 'Toute la journée' ||
+    block.durationMinutes >= 1440 ||
+    (isBirthday && (block.startTime === '09:00' || block.startTime === '00:00'));
 
   // Subtasks & checklist items
   const currentSubtasks: { id: string; text: string; completed: boolean }[] =
@@ -330,23 +343,36 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
 
       {/* Domain badge & Time summary */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-2xl text-xs font-bold uppercase tracking-wider border"
-          style={{
-            backgroundColor: `${domainConfig.color}15`,
-            borderColor: `${domainConfig.color}35`,
-            color: domainConfig.color,
-          }}
-        >
-          <Icon className="w-3.5 h-3.5" />
-          <span>{domainConfig.name}</span>
-        </div>
+        {block.isFixedConstraint ? (
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-2xl text-xs font-bold uppercase tracking-wider border bg-amber-500/15 text-amber-500 dark:text-amber-400 border-amber-500/35">
+            {isBirthday ? <Sparkles className="w-3.5 h-3.5 text-pink-400" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />}
+            <span>{isBirthday ? '🎂 Anniversaire / Repère' : '🔒 Contrainte Fixe'}</span>
+          </div>
+        ) : (
+          <div
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-2xl text-xs font-bold uppercase tracking-wider border"
+            style={{
+              backgroundColor: `${domainConfig.color}15`,
+              borderColor: `${domainConfig.color}35`,
+              color: domainConfig.color,
+            }}
+          >
+            <Icon className="w-3.5 h-3.5" />
+            <span>{domainConfig.name}</span>
+          </div>
+        )}
 
         <div className="flex items-center gap-2 sm:gap-3 text-xs font-medium text-[var(--text-secondary)] flex-wrap">
-          <span className="inline-flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-            {block.startTime} — {block.endTime} ({block.durationMinutes} min)
-          </span>
+          {isAllDay ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-pink-500/10 border border-pink-500/30 text-pink-500 dark:text-pink-400 font-bold">
+              <span>{isBirthday ? '🎂 Toute la journée (Anniversaire)' : '📅 Toute la journée'}</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+              {block.startTime} — {block.endTime} ({block.durationMinutes} min)
+            </span>
+          )}
           {block.isRecurring && (
             <span className="inline-flex items-center gap-1 bg-[var(--bg-surface)] px-2.5 py-0.5 rounded-xl border border-[var(--border-card)]">
               <Calendar className="w-3 h-3 text-[#6C5CE7]" />

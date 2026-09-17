@@ -215,20 +215,35 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
 
     const newBlocks: TimeBlock[] = toImport.map((evt) => {
       const isConstraint = evt.importAs === 'constraint';
-      const targetDomain = isConstraint ? 'curiosity' : evt.selectedPillarId;
+      // When imported as fixed constraint, assign to 'constraint' domain (NOT 'curiosity'!)
+      const targetDomain = isConstraint ? 'constraint' : evt.selectedPillarId;
 
-      // Handle All-Day events sensibly so they don't block 24 continuous hours on the timeline
+      const isBirthday =
+        evt.title.toLowerCase().includes('birthday') ||
+        evt.title.toLowerCase().includes('anniversaire') ||
+        evt.title.toLowerCase().includes('anniv') ||
+        evt.title.toLowerCase().includes('fête') ||
+        evt.title.toLowerCase().includes('fete') ||
+        evt.title.toLowerCase().includes('naissance');
+
+      const isAllDay = Boolean(
+        evt.isAllDay ||
+        evt.durationMinutes >= 1440 ||
+        evt.startTime === 'Toute la journée' ||
+        isBirthday
+      );
+
       let startMinutes: number;
       let durationMinutes: number;
       let startTime = evt.startTime;
       let endTime = evt.endTime;
 
-      if (evt.isAllDay || evt.durationMinutes >= 1440) {
-        // Place as a morning banner block (09:00 - 10:00) so it doesn't obstruct other daytime blocks
-        startMinutes = 9 * 60;
-        durationMinutes = 60;
-        startTime = '09:00';
-        endTime = '10:00';
+      if (isAllDay) {
+        // True all-day event: starts at 00:00, spans 1440 mins, labeled "Toute la journée"
+        startMinutes = 0;
+        durationMinutes = 1440;
+        startTime = 'Toute la journée';
+        endTime = 'Toute la journée';
       } else {
         const parts = (evt.startTime || '09:00').split(':').map((n) => parseInt(n, 10));
         const sh = !isNaN(parts[0]) ? parts[0] : 9;
@@ -246,10 +261,11 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
         endTime,
         startMinutes,
         durationMinutes,
+        isAllDay,
         isRecurring: false,
         recurringDays: [],
         globalObjective: isConstraint
-          ? (evt.description || `Contrainte fixe : ${evt.title}`)
+          ? (evt.description || (isBirthday ? `Anniversaire : ${evt.title}` : `Contrainte fixe : ${evt.title}`))
           : (evt.description || `Session de travail issue de votre calendrier : ${evt.title}`),
         subtasks: isConstraint
           ? []
@@ -262,7 +278,11 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
             ],
         checklist: [],
         notes: [
-          evt.isAllDay ? '📌 **Événement sur toute la journée (All-Day)**' : '',
+          isBirthday
+            ? '🎂 **Anniversaire / Événement repère (Toute la journée)**'
+            : isAllDay
+            ? '📌 **Événement sur toute la journée (All-Day)**'
+            : '',
           evt.description ? `### 📅 Notes du calendrier\n${evt.description}` : '',
           evt.location ? `**Lieu** : ${evt.location}` : '',
           evt.classificationReason ? `*Classification auto : ${evt.classificationReason}*` : '',

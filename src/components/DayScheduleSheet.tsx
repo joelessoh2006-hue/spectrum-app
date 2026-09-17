@@ -635,13 +635,29 @@ export const DayScheduleSheet: React.FC<DayScheduleSheetProps> = ({
           ) : (
             <div className="space-y-3">
               {chronologicalBlocks.map((block) => {
+                const titleLower = block.title.toLowerCase();
+                const isBirthday =
+                  titleLower.includes('birthday') ||
+                  titleLower.includes('anniversaire') ||
+                  titleLower.includes('anniv') ||
+                  titleLower.includes('naissance');
+                const isAllDay =
+                  Boolean(block.isAllDay) ||
+                  block.startTime === 'Toute la journée' ||
+                  block.durationMinutes >= 1440 ||
+                  (isBirthday && (block.startTime === '09:00' || block.startTime === '00:00'));
+
                 const cat = activeCategories.find((c) => c.id === block.domain) || {
                   id: block.domain,
                   name: block.domain,
-                  color: '#6C5CE7',
-                  iconName: 'Sparkles',
+                  color: block.isFixedConstraint ? (isBirthday ? '#EC4899' : '#F59E0B') : '#6C5CE7',
+                  iconName: block.isFixedConstraint ? (isBirthday ? 'Sparkles' : 'Lock') : 'Sparkles',
                 };
-                const PillarIcon = getPillarIcon(cat.iconName);
+                const PillarIcon = block.isFixedConstraint
+                  ? isBirthday
+                    ? Sparkles
+                    : Lock
+                  : getPillarIcon(cat.iconName);
 
                 const total = block.subtasks?.length || 0;
                 const done = block.subtasks?.filter((st) => st.completed).length || 0;
@@ -649,6 +665,7 @@ export const DayScheduleSheet: React.FC<DayScheduleSheetProps> = ({
 
                 const isCurrentLive =
                   isTodaySelected &&
+                  !isAllDay &&
                   currentHours * 60 + currentMinutes >= block.startMinutes &&
                   currentHours * 60 + currentMinutes < block.startMinutes + block.durationMinutes;
 
@@ -659,6 +676,8 @@ export const DayScheduleSheet: React.FC<DayScheduleSheetProps> = ({
                     className={`p-4 rounded-2xl bg-[var(--bg-surface)] border transition-all duration-200 cursor-pointer shadow-xs hover:shadow-md group relative ${
                       isCurrentLive
                         ? 'border-[#6C5CE7] ring-1 ring-[#6C5CE7]/40 shadow-[#6C5CE7]/15'
+                        : isAllDay && isBirthday
+                        ? 'border-pink-500/30 hover:border-pink-500/60 bg-pink-500/5'
                         : 'border-[var(--border-card)] hover:border-[var(--border-highlight)]'
                     }`}
                   >
@@ -675,9 +694,21 @@ export const DayScheduleSheet: React.FC<DayScheduleSheetProps> = ({
                         <div
                           className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border"
                           style={{
-                            backgroundColor: `${cat.color}15`,
-                            borderColor: `${cat.color}35`,
-                            color: cat.color,
+                            backgroundColor: block.isFixedConstraint
+                              ? isBirthday
+                                ? 'rgba(236, 72, 153, 0.12)'
+                                : 'rgba(245, 158, 11, 0.12)'
+                              : `${cat.color}15`,
+                            borderColor: block.isFixedConstraint
+                              ? isBirthday
+                                ? 'rgba(236, 72, 153, 0.3)'
+                                : 'rgba(245, 158, 11, 0.3)'
+                              : `${cat.color}35`,
+                            color: block.isFixedConstraint
+                              ? isBirthday
+                                ? '#EC4899'
+                                : '#F59E0B'
+                              : cat.color,
                           }}
                         >
                           <PillarIcon className="w-4 h-4" />
@@ -688,16 +719,29 @@ export const DayScheduleSheet: React.FC<DayScheduleSheetProps> = ({
                             <h4 className="text-sm font-bold text-[var(--text-primary)] group-hover:text-[#6C5CE7] transition-colors">
                               {block.title}
                             </h4>
-                            <span
-                              className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
-                              style={{
-                                color: cat.color,
-                                backgroundColor: `${cat.color}12`,
-                                borderColor: `${cat.color}30`,
-                              }}
-                            >
-                              {cat.name}
-                            </span>
+
+                            {block.isFixedConstraint ? (
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                                  isBirthday
+                                    ? 'bg-pink-500/15 text-pink-500 dark:text-pink-400 border-pink-500/30'
+                                    : 'bg-amber-500/15 text-amber-500 dark:text-amber-400 border-amber-500/30'
+                                }`}
+                              >
+                                {isBirthday ? '🎂 Anniversaire' : '🔒 Contrainte Fixe'}
+                              </span>
+                            ) : (
+                              <span
+                                className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
+                                style={{
+                                  color: cat.color,
+                                  backgroundColor: `${cat.color}12`,
+                                  borderColor: `${cat.color}30`,
+                                }}
+                              >
+                                {cat.name}
+                              </span>
+                            )}
                           </div>
 
                           {block.globalObjective && (
@@ -713,12 +757,18 @@ export const DayScheduleSheet: React.FC<DayScheduleSheetProps> = ({
                         className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <span className="text-xs font-mono font-semibold text-[var(--text-secondary)] flex items-center gap-1 mr-1">
-                          <Clock className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                          {block.startTime} — {block.endTime} ({block.durationMinutes}m)
-                        </span>
+                        {isAllDay ? (
+                          <span className="text-xs font-bold text-pink-500 dark:text-pink-400 flex items-center gap-1 px-2.5 py-1 rounded-xl bg-pink-500/10 border border-pink-500/25">
+                            <span>{isBirthday ? '🎂 Toute la journée' : '📅 Toute la journée'}</span>
+                          </span>
+                        ) : (
+                          <span className="text-xs font-mono font-semibold text-[var(--text-secondary)] flex items-center gap-1 mr-1">
+                            <Clock className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                            {block.startTime} — {block.endTime} ({block.durationMinutes}m)
+                          </span>
+                        )}
 
-                        {onUpdateBlock && (
+                        {!isAllDay && onUpdateBlock && (
                           <div className="flex items-center gap-0.5 bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-lg p-0.5">
                             <button
                               type="button"

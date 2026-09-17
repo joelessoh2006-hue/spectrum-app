@@ -572,6 +572,17 @@ export const ImportedEventsModal: React.FC<ImportedEventsModalProps> = ({
                   <div className="p-3 sm:p-4 divide-y divide-[var(--border-card)]">
                     {items.map((block) => {
                       const domainInfo = getDomainInfo(block.domain);
+                      const titleLower = block.title.toLowerCase();
+                      const isBirthday =
+                        titleLower.includes('birthday') ||
+                        titleLower.includes('anniversaire') ||
+                        titleLower.includes('anniv') ||
+                        titleLower.includes('naissance');
+                      const isAllDay =
+                        Boolean(block.isAllDay) ||
+                        block.startTime === 'Toute la journée' ||
+                        block.durationMinutes >= 1440 ||
+                        (isBirthday && (block.startTime === '09:00' || block.startTime === '00:00'));
 
                       return (
                         <div
@@ -580,13 +591,19 @@ export const ImportedEventsModal: React.FC<ImportedEventsModalProps> = ({
                         >
                           <div className="flex items-start gap-3 min-w-[240px] flex-1">
                             {/* Time badge */}
-                            <div className="shrink-0 mt-0.5 px-2.5 py-1 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-card)] text-xs font-mono font-bold text-[var(--text-primary)] flex items-center gap-1.5 shadow-2xs">
-                              <Clock className="w-3 h-3 text-[#6C5CE7]" />
-                              <span>
-                                {block.startTime}
-                                {block.endTime ? ` - ${block.endTime}` : ''}
-                              </span>
-                            </div>
+                            {isAllDay ? (
+                              <div className="shrink-0 mt-0.5 px-2.5 py-1 rounded-xl bg-pink-500/10 border border-pink-500/25 text-xs font-bold text-pink-500 dark:text-pink-400 flex items-center gap-1.5 shadow-2xs">
+                                <span>{isBirthday ? '🎂 Toute la journée' : '📅 Toute la journée'}</span>
+                              </div>
+                            ) : (
+                              <div className="shrink-0 mt-0.5 px-2.5 py-1 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-card)] text-xs font-mono font-bold text-[var(--text-primary)] flex items-center gap-1.5 shadow-2xs">
+                                <Clock className="w-3 h-3 text-[#6C5CE7]" />
+                                <span>
+                                  {block.startTime}
+                                  {block.endTime ? ` - ${block.endTime}` : ''}
+                                </span>
+                              </div>
+                            )}
 
                             {/* Block info */}
                             <div className="space-y-1">
@@ -595,31 +612,39 @@ export const ImportedEventsModal: React.FC<ImportedEventsModalProps> = ({
                                   {block.title}
                                 </h4>
 
-                                {/* Pillar Badge */}
-                                <span
-                                  className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white shadow-2xs"
-                                  style={{ backgroundColor: domainInfo.color }}
-                                >
-                                  {domainInfo.name}
-                                </span>
-
                                 {/* Fixed Constraint Badge vs Active block */}
                                 {block.isFixedConstraint ? (
-                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                                    <Lock className="w-2.5 h-2.5" />
-                                    <span>Contrainte Fixe</span>
-                                  </span>
+                                  <>
+                                    {isBirthday && (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-pink-500/15 text-pink-500 dark:text-pink-400 border border-pink-500/30 flex items-center gap-1">
+                                        🎂 Anniversaire
+                                      </span>
+                                    )}
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-500 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                                      <Lock className="w-2.5 h-2.5" />
+                                      <span>Contrainte Fixe</span>
+                                    </span>
+                                  </>
                                 ) : (
-                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#55E6C1]/15 text-[#55E6C1] border border-[#55E6C1]/30 flex items-center gap-1">
-                                    <Zap className="w-2.5 h-2.5" />
-                                    <span>Bloc Actif</span>
-                                  </span>
+                                  <>
+                                    {/* Pillar Badge ONLY for true Spectrum Active Blocks */}
+                                    <span
+                                      className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white shadow-2xs"
+                                      style={{ backgroundColor: domainInfo.color }}
+                                    >
+                                      {domainInfo.name}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#55E6C1]/15 text-[#55E6C1] border border-[#55E6C1]/30 flex items-center gap-1">
+                                      <Zap className="w-2.5 h-2.5" />
+                                      <span>Bloc Actif</span>
+                                    </span>
+                                  </>
                                 )}
                               </div>
 
                               {/* Location or duration notes */}
                               <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)] flex-wrap">
-                                <span>{block.durationMinutes} minutes</span>
+                                <span>{isAllDay ? 'Journée entière' : `${block.durationMinutes} minutes`}</span>
                                 {block.location && (
                                   <span className="flex items-center gap-1 text-[var(--text-secondary)]">
                                     <MapPin className="w-3 h-3 text-[#55E6C1]" />

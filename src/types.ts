@@ -48,6 +48,7 @@ export interface TimeBlock {
   isFocusSessionActive?: boolean;
   completed?: boolean;
   isFixedConstraint?: boolean; // Vrai si événement importé (contrainte fixe/agenda externe)
+  isAllDay?: boolean;          // Vrai si événement sur toute la journée (anniversaire, fête, congé...)
   sourceCalendar?: string;     // Ex: "Calendrier Xiaomi", "Google Calendar", "Fichier .ics"
   location?: string;
   reminderEnabled?: boolean;   // Active/désactive le rappel de notification pour cette activité

@@ -88,13 +88,13 @@ function parseICSDate(dateStr: string): Date | null {
     return new Date(year, month, day, hour, min, sec);
   }
 
-  // Date only: YYYYMMDD
+  // Date only: YYYYMMDD (All-day event)
   const dMatch = cleaned.match(/^(\d{4})(\d{2})(\d{2})$/);
   if (dMatch) {
     const year = parseInt(dMatch[1], 10);
     const month = parseInt(dMatch[2], 10) - 1;
     const day = parseInt(dMatch[3], 10);
-    return new Date(year, month, day, 9, 0, 0); // Default to 09:00 for all-day events
+    return new Date(year, month, day, 0, 0, 0); // All-day events start at 00:00:00
   }
 
   return null;
@@ -316,9 +316,38 @@ function createEventFromProps(
     (props['DTSTART'] && props['DTSTART'].trim().length === 8)
   );
 
-  const isAllDay = isDateOnly || durationMinutes >= 1440 || (startTime === '00:00' && endTime === '00:00');
+  const rawTitleLower = rawTitle.toLowerCase();
+  const isBirthday =
+    rawTitleLower.includes('birthday') ||
+    rawTitleLower.includes('anniversaire') ||
+    rawTitleLower.includes('anniv') ||
+    rawTitleLower.includes('fête') ||
+    rawTitleLower.includes('fete') ||
+    rawTitleLower.includes('naissance');
 
-  const { importAs, pillarId, reason } = guessCategoryAndType(title, description || '', defaultPillarId);
+  const isAllDay =
+    isDateOnly ||
+    durationMinutes >= 1440 ||
+    (startTime === '00:00' && (endTime === '00:00' || endTime === '23:59')) ||
+    isBirthday;
+
+  const finalStartTime = isAllDay ? 'Toute la journée' : startTime;
+  const finalEndTime = isAllDay ? 'Toute la journée' : endTime;
+  const finalDurationMinutes = isAllDay ? 1440 : durationMinutes;
+
+  const categoryResult = isBirthday
+    ? {
+        importAs: 'constraint' as const,
+        pillarId: 'constraint',
+        reason: '🎂 Anniversaire / Repère agenda (Journée entière)',
+      }
+    : isAllDay
+    ? {
+        importAs: 'constraint' as const,
+        pillarId: 'constraint',
+        reason: '📅 Événement journée entière (All-Day)',
+      }
+    : guessCategoryAndType(title, description || '', defaultPillarId);
 
   return {
     id: props['UID'] || `ics-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -326,17 +355,17 @@ function createEventFromProps(
     startDate,
     endDate,
     dateStr,
-    startTime: isAllDay && startTime === '00:00' ? '00:00' : startTime,
-    endTime: isAllDay && endTime === '00:00' ? '23:59' : endTime,
-    durationMinutes,
+    startTime: finalStartTime,
+    endTime: finalEndTime,
+    durationMinutes: finalDurationMinutes,
     description,
     location,
     source: 'Fichier .ics / Xiaomi / Google',
-    importAs,
-    selectedPillarId: pillarId,
+    importAs: categoryResult.importAs,
+    selectedPillarId: categoryResult.pillarId,
     included: true,
     isAllDay,
-    classificationReason: isAllDay ? '📅 Événement journée entière (All-Day)' : reason,
+    classificationReason: categoryResult.reason,
   };
 }
 

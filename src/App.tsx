@@ -165,7 +165,48 @@ export default function App() {
       unsubscribeBlocks = subscribeToUserTimeBlocks(
         user.uid,
         (remoteBlocks) => {
-          setTimeBlocks(remoteBlocks);
+          // Auto-repair existing blocks (e.g., birthdays forced to 09:00-10:00 or assigned to curiosity)
+          const repaired = remoteBlocks.map((b) => {
+            let mod = false;
+            let updated = { ...b };
+            const titleLower = (b.title || '').toLowerCase();
+            const isBirthday =
+              titleLower.includes('birthday') ||
+              titleLower.includes('anniversaire') ||
+              titleLower.includes('anniv') ||
+              titleLower.includes('naissance');
+
+            // 1. If it's a fixed constraint or birthday, it shouldn't be assigned to 'curiosity'
+            if ((b.isFixedConstraint || isBirthday) && (b.domain === 'curiosity' || !b.domain)) {
+              updated.domain = 'constraint';
+              updated.isFixedConstraint = true;
+              mod = true;
+            }
+
+            // 2. If it's an all-day event or birthday stuck at 09:00-10:00
+            if (
+              (isBirthday || b.isAllDay) &&
+              ((b.startTime === '09:00' && b.endTime === '10:00') || !b.isAllDay)
+            ) {
+              updated.isAllDay = true;
+              updated.startTime = 'Toute la journée';
+              updated.endTime = 'Toute la journée';
+              updated.startMinutes = 0;
+              updated.durationMinutes = 1440;
+              mod = true;
+            }
+
+            if (mod) {
+              // Persist repair asynchronously to Firestore
+              saveUserTimeBlock(user.uid, updated).catch((e) =>
+                console.warn('Erreur auto-réparation bloc:', e)
+              );
+              return updated;
+            }
+            return b;
+          });
+
+          setTimeBlocks(repaired);
           setFirestoreStatus('connected');
         },
         (err) => {
