@@ -7,6 +7,7 @@ import { MultipotentialBalanceRadar } from './MultipotentialBalanceRadar';
 import { ImportCalendarModal } from './ImportCalendarModal';
 import { WaitingMilestonesDrawer, MilestoneDragData } from './WaitingMilestonesDrawer';
 import { DayScheduleSheet } from './DayScheduleSheet';
+import { ErrorBoundary } from './ErrorBoundary';
 import {
   Clock,
   Plus,
@@ -445,6 +446,7 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
         onOpenAddModal={(pId, dStr) => {
           onOpenAddModal(pId, dStr || selectedDateString);
         }}
+        onOpenImportModal={() => setIsImportModalOpen(true)}
         onStartInstantSession={onStartInstantSession}
         onOpenInstantSessionModal={onOpenInstantSessionModal}
         waitingMilestonesCount={waitingMilestonesCount}
@@ -452,17 +454,19 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
       />
 
       {/* Modal d'importation de calendrier Xiaomi / Google (.ics) */}
-      <ImportCalendarModal
-        isOpen={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
-        categories={activeCategories}
-        selectedDate={selectedDate}
-        onImportBlocks={(newBlocks) => {
-          if (onImportBlocks) {
-            onImportBlocks(newBlocks);
-          }
-        }}
-      />
+      <ErrorBoundary fallbackTitle="Erreur lors de l'importation du calendrier" onReset={() => setIsImportModalOpen(false)}>
+        <ImportCalendarModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          categories={activeCategories}
+          selectedDate={selectedDate}
+          onImportBlocks={(newBlocks) => {
+            if (onImportBlocks) {
+              onImportBlocks(newBlocks);
+            }
+          }}
+        />
+      </ErrorBoundary>
 
       {/* Tiroir latéral des jalons Bento en attente */}
       <WaitingMilestonesDrawer

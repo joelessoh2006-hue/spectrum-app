@@ -17,6 +17,7 @@ import {
   Lock,
   MapPin,
   Zap,
+  UploadCloud,
   Calendar as CalendarIcon,
 } from 'lucide-react';
 
@@ -32,6 +33,7 @@ interface DayScheduleSheetProps {
   onAddBlock?: (newBlock: Omit<TimeBlock, 'id'>) => void;
   onShiftDayBlocks?: (minutes: number) => void;
   onOpenAddModal: (pillarId?: string, defaultDateStr?: string) => void;
+  onOpenImportModal?: () => void;
   onStartInstantSession?: (options?: {
     pillarId?: string;
     title?: string;
@@ -72,6 +74,7 @@ export const DayScheduleSheet: React.FC<DayScheduleSheetProps> = ({
   onUpdateBlock,
   onShiftDayBlocks,
   onOpenAddModal,
+  onOpenImportModal,
   onStartInstantSession,
   onOpenInstantSessionModal,
   waitingMilestonesCount = 0,
@@ -413,6 +416,19 @@ export const DayScheduleSheet: React.FC<DayScheduleSheetProps> = ({
               </button>
             )}
 
+            {onOpenImportModal && (
+              <button
+                type="button"
+                id="sheet-import-cal-btn"
+                onClick={onOpenImportModal}
+                className="px-2.5 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--border-card)] border border-[var(--border-card)] text-xs font-bold text-[var(--text-primary)] transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="Importer un fichier .ics (Xiaomi / Google Agenda)"
+              >
+                <UploadCloud className="w-3.5 h-3.5 text-[#6C5CE7]" />
+                <span className="hidden sm:inline">Importer</span>
+              </button>
+            )}
+
             <button
               type="button"
               id="sheet-add-block-btn"
@@ -588,6 +604,16 @@ export const DayScheduleSheet: React.FC<DayScheduleSheetProps> = ({
                   <Plus className="w-3.5 h-3.5" />
                   <span>Planifier une activité</span>
                 </button>
+                {onOpenImportModal && (
+                  <button
+                    type="button"
+                    onClick={onOpenImportModal}
+                    className="px-4 py-2 rounded-xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] border border-[var(--border-card)] text-[var(--text-primary)] text-xs font-bold transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5 text-[#6C5CE7]" />
+                    <span>Importer un calendrier (.ics)</span>
+                  </button>
+                )}
               </div>
             </div>
           ) : (

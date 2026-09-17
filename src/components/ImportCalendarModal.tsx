@@ -38,10 +38,12 @@ interface ImportCalendarModalProps {
 export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
   isOpen,
   onClose,
-  categories,
+  categories = [],
   selectedDate,
   onImportBlocks,
 }) => {
+  const [inputMode, setInputMode] = useState<'upload' | 'paste'>('upload');
+  const [rawPastedText, setRawPastedText] = useState<string>('');
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsedEvents, setParsedEvents] = useState<ImportedCalendarEvent[]>([]);
@@ -51,22 +53,70 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
   const [showConceptsGuide, setShowConceptsGuide] = useState<boolean>(true);
   const [dragActive, setDragActive] = useState<boolean>(false);
   const [aiFeedbackMessage, setAiFeedbackMessage] = useState<string | null>(null);
+  const [parseErrorMessage, setParseErrorMessage] = useState<string | null>(null);
   const [importSuccessCount, setImportSuccessCount] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (!isOpen) return null;
-
-  const defaultPillarId = categories[0]?.id || 'tech';
+  const defaultPillarId = categories && categories.length > 0 ? categories[0]?.id : 'tech';
 
   const formatTwoDigits = (n: number) => (n < 10 ? `0${n}` : `${n}`);
-  const selectedDateStr = `${selectedDate.getFullYear()}-${formatTwoDigits(selectedDate.getMonth() + 1)}-${formatTwoDigits(selectedDate.getDate())}`;
+  const safeDate = selectedDate instanceof Date && !isNaN(selectedDate.getTime()) ? selectedDate : new Date();
+  const selectedDateStr = `${safeDate.getFullYear()}-${formatTwoDigits(safeDate.getMonth() + 1)}-${formatTwoDigits(safeDate.getDate())}`;
+
+  // Filter events based on user selection and search query - Hook called unconditionally at top
+  const displayedEvents = useMemo(() => {
+    if (!parsedEvents || parsedEvents.length === 0) return [];
+    return parsedEvents.filter((evt) => {
+      // 1. Filter by search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesTitle = evt.title.toLowerCase().includes(q);
+        const matchesDesc = (evt.description || '').toLowerCase().includes(q);
+        const matchesLoc = (evt.location || '').toLowerCase().includes(q);
+        const matchesDate = evt.dateStr.includes(q);
+        if (!matchesTitle && !matchesDesc && !matchesLoc && !matchesDate) {
+          return false;
+        }
+      }
+
+      // 2. Filter by mode
+      if (filterMode === 'today') {
+        return evt.dateStr === selectedDateStr;
+      }
+      if (filterMode === 'constraint') {
+        return evt.importAs === 'constraint';
+      }
+      if (filterMode === 'spectrum_block') {
+        return evt.importAs === 'spectrum_block';
+      }
+      if (filterMode === 'allday') {
+        return Boolean(evt.isAllDay);
+      }
+      return true;
+    });
+  }, [parsedEvents, filterMode, searchQuery, selectedDateStr]);
+
+  const includedCount = displayedEvents.filter((e) => e.included).length;
 
   const handleProcessICS = (content: string, name: string) => {
-    setFileContent(content);
-    setFileName(name);
-    const events = parseICS(content, defaultPillarId, selectedDate);
-    setParsedEvents(events);
-    setImportSuccessCount(null);
+    try {
+      setParseErrorMessage(null);
+      if (!content || !content.trim()) {
+        setParseErrorMessage('Le fichier ou texte fourni est vide.');
+        return;
+      }
+      setFileContent(content);
+      setFileName(name);
+      const events = parseICS(content, defaultPillarId, safeDate);
+      if (events.length === 0) {
+        setParseErrorMessage("Aucun événement valide (VEVENT) n'a été détecté dans ce calendrier.");
+      }
+      setParsedEvents(events);
+      setImportSuccessCount(null);
+    } catch (err: any) {
+      console.error('Erreur analyse ICS:', err);
+      setParseErrorMessage("Impossible de lire ce format de calendrier. Vérifiez qu'il s'agit bien d'un export .ics.");
+    }
   };
 
   const handleFileUpload = (file: File) => {
@@ -76,6 +126,9 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
       if (text) {
         handleProcessICS(text, file.name);
       }
+    };
+    reader.onerror = () => {
+      setParseErrorMessage('Erreur lors de la lecture du fichier sur votre appareil.');
     };
     reader.readAsText(file);
   };
@@ -89,8 +142,13 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
   };
 
   const handleLoadSample = () => {
-    const sample = getSampleXiaomiICS(selectedDate);
+    const sample = getSampleXiaomiICS(safeDate);
     handleProcessICS(sample, 'export_calendrier_xiaomi.ics');
+  };
+
+  const handleProcessPastedText = () => {
+    if (!rawPastedText.trim()) return;
+    handleProcessICS(rawPastedText, 'texte_ics_colle.ics');
   };
 
   const handleToggleInclude = (id: string) => {
@@ -151,40 +209,6 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
     }, 4500);
   };
 
-  // Filter events based on user selection and search query
-  const displayedEvents = useMemo(() => {
-    return parsedEvents.filter((evt) => {
-      // 1. Filter by search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesTitle = evt.title.toLowerCase().includes(q);
-        const matchesDesc = (evt.description || '').toLowerCase().includes(q);
-        const matchesLoc = (evt.location || '').toLowerCase().includes(q);
-        const matchesDate = evt.dateStr.includes(q);
-        if (!matchesTitle && !matchesDesc && !matchesLoc && !matchesDate) {
-          return false;
-        }
-      }
-
-      // 2. Filter by mode
-      if (filterMode === 'today') {
-        return evt.dateStr === selectedDateStr;
-      }
-      if (filterMode === 'constraint') {
-        return evt.importAs === 'constraint';
-      }
-      if (filterMode === 'spectrum_block') {
-        return evt.importAs === 'spectrum_block';
-      }
-      if (filterMode === 'allday') {
-        return Boolean(evt.isAllDay);
-      }
-      return true;
-    });
-  }, [parsedEvents, filterMode, searchQuery, selectedDateStr]);
-
-  const includedCount = displayedEvents.filter((e) => e.included).length;
-
   const handleExecuteImport = () => {
     const toImport = displayedEvents.filter((e) => e.included);
     if (toImport.length === 0) return;
@@ -206,9 +230,11 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
         startTime = '09:00';
         endTime = '10:00';
       } else {
-        const [sh, sm] = evt.startTime.split(':').map((n) => parseInt(n, 10));
-        startMinutes = (sh || 0) * 60 + (sm || 0);
-        durationMinutes = Math.max(15, evt.durationMinutes);
+        const parts = (evt.startTime || '09:00').split(':').map((n) => parseInt(n, 10));
+        const sh = !isNaN(parts[0]) ? parts[0] : 9;
+        const sm = !isNaN(parts[1]) ? parts[1] : 0;
+        startMinutes = sh * 60 + sm;
+        durationMinutes = Math.max(15, evt.durationMinutes || 60);
       }
 
       return {
@@ -256,6 +282,9 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
       onClose();
     }, 1200);
   };
+
+  // Safe early return AFTER all hooks have executed
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto animate-fadeIn font-['Plus_Jakarta_Sans',sans-serif]">
@@ -340,7 +369,7 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
             )}
           </div>
 
-          {/* Xiaomi Guide Dropdown */}
+          {/* Xiaomi & Google Calendar Guide Dropdown */}
           <div className="rounded-2xl border border-[var(--border-card)] bg-[var(--bg-surface-elevated)] overflow-hidden">
             <button
               type="button"
@@ -349,7 +378,7 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
             >
               <span className="flex items-center gap-2">
                 <Smartphone className="w-4 h-4 text-[#55E6C1]" />
-                <span>Où trouver votre fichier .ics sur smartphone Xiaomi / Google Agenda ?</span>
+                <span>Où trouver votre calendrier sur smartphone Xiaomi ou Google Agenda ?</span>
               </span>
               {showXiaomiGuide ? (
                 <ChevronUp className="w-4 h-4 text-[var(--text-muted)]" />
@@ -359,80 +388,164 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
             </button>
 
             {showXiaomiGuide && (
-              <div className="px-4 pb-4 pt-1 text-xs text-[var(--text-secondary)] space-y-2 border-t border-[var(--border-card)] bg-[var(--bg-surface)]">
-                <p>
-                  <strong>Option Google Agenda (Recommandé) :</strong> Rendez-vous sur{' '}
-                  <a
-                    href="https://calendar.google.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[#6C5CE7] underline font-semibold"
-                  >
-                    calendar.google.com
-                  </a>
-                  {' '}→ Roue crantée <em>Paramètres</em> → <em>Importer et exporter</em> → <em>Exporter</em>. Le fichier téléchargé se termine par <code>.ics</code>.
-                </p>
-                <p>
-                  <strong>Option Calendrier Xiaomi (MIUI / HyperOS) :</strong> Ouvrez l'application <em>Calendrier</em> → Menu ☰ ou ⚙️ → <em>Paramètres avancés</em> → <em>Exporter</em> dans vos documents.
-                </p>
+              <div className="px-4 pb-4 pt-1 text-xs text-[var(--text-secondary)] space-y-2.5 border-t border-[var(--border-card)] bg-[var(--bg-surface)]">
+                <div className="p-2.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)]">
+                  <p className="font-bold text-[var(--text-primary)] mb-1">
+                    Option 1 : Google Agenda (Export .ics standard)
+                  </p>
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                    Sur un navigateur ou PC, accédez à <code className="px-1.5 py-0.5 rounded bg-[var(--bg-surface)] font-mono text-[#6C5CE7] font-semibold">calendar.google.com</code> → Cliquez sur la roue crantée ⚙️ <em>Paramètres</em> → Dans le menu de gauche, choisissez <em>Importer et exporter</em> → Cliquez sur le bouton <em>Exporter</em>. Vous obtiendrez un fichier <code>.ics</code> à glisser ici.
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)]">
+                  <p className="font-bold text-[var(--text-primary)] mb-1">
+                    Option 2 : Smartphone Xiaomi (MIUI / HyperOS)
+                  </p>
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                    Ouvrez l'application native <em>Calendrier</em> Xiaomi → Menu en haut (☰ ou ⚙️) → <em>Paramètres avancés</em> → <em>Exporter les événements</em>. Le fichier <code>.ics</code> est enregistré dans votre dossier <em>Téléchargements</em> ou <em>Documents</em>.
+                  </p>
+                </div>
               </div>
             )}
           </div>
 
+          {/* Parse error alert banner if any */}
+          {parseErrorMessage && (
+            <div className="p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-500 text-xs font-semibold flex items-center justify-between gap-2 animate-fadeIn">
+              <span className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{parseErrorMessage}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setParseErrorMessage(null)}
+                className="text-[11px] underline hover:text-rose-400"
+              >
+                Ignorer
+              </button>
+            </div>
+          )}
+
+          {/* Upload / Paste Mode Switcher */}
+          {!fileContent && (
+            <div className="flex items-center gap-2 p-1 bg-[var(--bg-surface-elevated)] rounded-2xl border border-[var(--border-card)] w-fit mx-auto text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setInputMode('upload')}
+                className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                  inputMode === 'upload'
+                    ? 'bg-[#6C5CE7] text-white shadow-xs'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                <span>Importer un fichier (.ics)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode('paste')}
+                className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                  inputMode === 'paste'
+                    ? 'bg-[#6C5CE7] text-white shadow-xs'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Coller le texte .ics brut</span>
+              </button>
+            </div>
+          )}
+
           {/* Upload / Drag & Drop Zone */}
           {!fileContent ? (
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-3xl p-8 text-center cursor-pointer transition-all ${
-                dragActive
-                  ? 'border-[#6C5CE7] bg-[#6C5CE7]/10 scale-[1.01]'
-                  : 'border-[var(--border-card)] hover:border-[#6C5CE7] bg-[var(--bg-surface-elevated)]/40 hover:bg-[var(--bg-surface-elevated)]'
-              }`}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".ics,.ical,text/calendar"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    handleFileUpload(e.target.files[0]);
-                  }
+            inputMode === 'upload' ? (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragActive(true);
                 }}
-              />
+                onDragLeave={() => setDragActive(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-3xl p-8 text-center cursor-pointer transition-all ${
+                  dragActive
+                    ? 'border-[#6C5CE7] bg-[#6C5CE7]/10 scale-[1.01]'
+                    : 'border-[var(--border-card)] hover:border-[#6C5CE7] bg-[var(--bg-surface-elevated)]/40 hover:bg-[var(--bg-surface-elevated)]'
+                }`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".ics,.ical,text/calendar"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handleFileUpload(e.target.files[0]);
+                    }
+                  }}
+                />
 
-              <div className="w-14 h-14 rounded-2xl bg-[#6C5CE7]/10 text-[#6C5CE7] flex items-center justify-center mx-auto mb-3 border border-[#6C5CE7]/20 shadow-inner">
-                <UploadCloud className="w-7 h-7" />
+                <div className="w-14 h-14 rounded-2xl bg-[#6C5CE7]/10 text-[#6C5CE7] flex items-center justify-center mx-auto mb-3 border border-[#6C5CE7]/20 shadow-inner">
+                  <UploadCloud className="w-7 h-7" />
+                </div>
+                <h3 className="text-base font-bold text-[var(--text-primary)]">
+                  Glissez votre fichier .ics ici ou cliquez pour parcourir
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] mt-1.5 max-w-sm mx-auto">
+                  Compatible avec les calendriers Google, Xiaomi, Apple iCal et Outlook.
+                </p>
+
+                {/* Quick sample button */}
+                <div className="mt-5 pt-4 border-t border-[var(--border-card)] flex flex-wrap items-center justify-center gap-2">
+                  <span className="text-xs text-[var(--text-muted)]">Tester d'abord ?</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleLoadSample();
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#6C5CE7]/15 hover:bg-[#6C5CE7] text-[#6C5CE7] hover:text-white border border-[#6C5CE7]/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Charger un exemple de calendrier</span>
+                  </button>
+                </div>
               </div>
-              <h3 className="text-base font-bold text-[var(--text-primary)]">
-                Glissez votre fichier .ics ici ou cliquez pour parcourir
-              </h3>
-              <p className="text-xs text-[var(--text-secondary)] mt-1.5 max-w-sm mx-auto">
-                Compatible avec les calendriers Google, Xiaomi, Apple iCal et Outlook.
-              </p>
-
-              {/* Quick sample button */}
-              <div className="mt-5 pt-4 border-t border-[var(--border-card)] flex flex-wrap items-center justify-center gap-2">
-                <span className="text-xs text-[var(--text-muted)]">Tester d'abord ?</span>
+            ) : (
+              /* Raw Paste Zone */
+              <div className="p-5 rounded-3xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-[#6C5CE7]" />
+                    <span>Collez le contenu d'un fichier .ics ou VCALENDAR</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleLoadSample}
+                    className="text-xs text-[#6C5CE7] hover:underline font-semibold flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Charger un modèle exemple</span>
+                  </button>
+                </div>
+                <textarea
+                  value={rawPastedText}
+                  onChange={(e) => setRawPastedText(e.target.value)}
+                  placeholder="BEGIN:VCALENDAR&#10;VERSION:2.0&#10;BEGIN:VEVENT&#10;SUMMARY:Réunion projet Spectrum&#10;DTSTART:20260917T140000Z&#10;DTEND:20260917T153000Z&#10;END:VEVENT&#10;END:VCALENDAR"
+                  rows={8}
+                  className="w-full p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-card)] text-xs font-mono text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7]"
+                />
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleLoadSample();
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl bg-[#6C5CE7]/15 hover:bg-[#6C5CE7] text-[#6C5CE7] hover:text-white border border-[#6C5CE7]/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  onClick={handleProcessPastedText}
+                  disabled={!rawPastedText.trim()}
+                  className="w-full py-2.5 rounded-xl bg-[#6C5CE7] hover:bg-[#5b4bc4] disabled:opacity-40 text-white font-bold text-xs transition shadow-md shadow-[#6C5CE7]/20 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Charger un exemple de calendrier</span>
+                  <Sparkles className="w-4 h-4" />
+                  <span>Analyser les événements du texte collé</span>
                 </button>
               </div>
-            </div>
+            )
           ) : (
             /* File is loaded & events displayed */
             <div className="space-y-4">
