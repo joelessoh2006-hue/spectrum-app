@@ -25,6 +25,7 @@ import {
   Wand2,
   Layers,
   CalendarDays,
+  Repeat,
 } from 'lucide-react';
 
 interface ImportCalendarModalProps {
@@ -209,6 +210,17 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
     }, 4500);
   };
 
+  // Toggle annual recurrence for an event before import
+  const handleToggleYearly = (eventId: string) => {
+    setParsedEvents((prev) =>
+      prev.map((evt) =>
+        evt.id === eventId
+          ? { ...evt, isYearly: !evt.isYearly }
+          : evt
+      )
+    );
+  };
+
   const handleExecuteImport = () => {
     const toImport = displayedEvents.filter((e) => e.included);
     if (toImport.length === 0) return;
@@ -225,6 +237,8 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
         evt.title.toLowerCase().includes('fête') ||
         evt.title.toLowerCase().includes('fete') ||
         evt.title.toLowerCase().includes('naissance');
+
+      const isYearly = Boolean(evt.isYearly || isBirthday);
 
       const isAllDay = Boolean(
         evt.isAllDay ||
@@ -262,10 +276,11 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
         startMinutes,
         durationMinutes,
         isAllDay,
-        isRecurring: false,
+        isYearly,
+        isRecurring: isYearly,
         recurringDays: [],
         globalObjective: isConstraint
-          ? (evt.description || (isBirthday ? `Anniversaire : ${evt.title}` : `Contrainte fixe : ${evt.title}`))
+          ? (evt.description || (isBirthday ? `Anniversaire : ${evt.title}` : isYearly ? `Rendez-vous annuel : ${evt.title}` : `Contrainte fixe : ${evt.title}`))
           : (evt.description || `Session de travail issue de votre calendrier : ${evt.title}`),
         subtasks: isConstraint
           ? []
@@ -279,7 +294,9 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
         checklist: [],
         notes: [
           isBirthday
-            ? '🎂 **Anniversaire / Événement repère (Toute la journée)**'
+            ? '🎂 **Anniversaire / Rendez-vous annuel (Toute la journée, se répète chaque année)**'
+            : isYearly
+            ? '🔁 **Rendez-vous annuel (se répète chaque année à cette date)**'
             : isAllDay
             ? '📌 **Événement sur toute la journée (All-Day)**'
             : '',
@@ -792,12 +809,27 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
                                 <span>{evt.startTime} — {evt.endTime} ({evt.durationMinutes >= 60 ? `${Math.floor(evt.durationMinutes / 60)}h${evt.durationMinutes % 60 ? evt.durationMinutes % 60 : ''}` : `${evt.durationMinutes}m`})</span>
                               </span>
                             )}
+
+                            {/* Annual recurrence toggle badge */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleYearly(evt.id)}
+                              className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border transition cursor-pointer ${
+                                evt.isYearly
+                                  ? 'bg-purple-500/15 text-purple-400 border-purple-500/30 shadow-xs'
+                                  : 'bg-[var(--bg-surface)] text-[var(--text-muted)] border-[var(--border-card)] hover:text-[var(--text-primary)]'
+                              }`}
+                              title={evt.isYearly ? 'Répétition annuelle activée (cliquez pour désactiver)' : 'Cliquer pour faire répéter chaque année'}
+                            >
+                              <Repeat className="w-3 h-3" />
+                              <span>{evt.isYearly ? '🔁 Annuel' : 'Rendre annuel'}</span>
+                            </button>
                           </div>
 
                           {/* Date badge */}
                           <div className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-1">
                             <CalendarDays className="w-3 h-3" />
-                            <span>{evt.dateStr}</span>
+                            <span>{evt.isYearly ? `${evt.dateStr.slice(5)} (Chaque année)` : evt.dateStr}</span>
                           </div>
                         </div>
 

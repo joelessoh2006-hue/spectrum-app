@@ -49,6 +49,7 @@ export interface TimeBlock {
   completed?: boolean;
   isFixedConstraint?: boolean; // Vrai si événement importé (contrainte fixe/agenda externe)
   isAllDay?: boolean;          // Vrai si événement sur toute la journée (anniversaire, fête, congé...)
+  isYearly?: boolean;          // Vrai si rendez-vous annuel qui se répète chaque année (ex: anniversaire)
   sourceCalendar?: string;     // Ex: "Calendrier Xiaomi", "Google Calendar", "Fichier .ics"
   location?: string;
   reminderEnabled?: boolean;   // Active/désactive le rappel de notification pour cette activité
@@ -71,6 +72,7 @@ export interface ImportedCalendarEvent {
   selectedPillarId: string;
   included: boolean;
   isAllDay?: boolean;
+  isYearly?: boolean;          // Vrai si rendez-vous annuel
   classificationReason?: string;
 }
 

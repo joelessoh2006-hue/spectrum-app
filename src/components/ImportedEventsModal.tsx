@@ -19,6 +19,7 @@ import {
   X,
   AlertTriangle,
   Sparkles,
+  Repeat,
 } from 'lucide-react';
 
 interface ImportedEventsModalProps {
@@ -33,6 +34,7 @@ interface ImportedEventsModalProps {
   onOpenImportModal?: () => void;
   onDeleteBlock?: (blockId: string) => void;
   onDeleteBlocks?: (blockIds: string[]) => void;
+  onUpdateBlock?: (block: TimeBlock) => void;
 }
 
 const FRENCH_DAYS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -63,6 +65,7 @@ export const ImportedEventsModal: React.FC<ImportedEventsModalProps> = ({
   onOpenImportModal,
   onDeleteBlock,
   onDeleteBlocks,
+  onUpdateBlock,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'upcoming' | 'past' | 'constraints' | 'spectrum'>('all');
@@ -138,6 +141,15 @@ export const ImportedEventsModal: React.FC<ImportedEventsModalProps> = ({
     const monthName = FRENCH_MONTHS[d.getMonth()];
     const year = d.getFullYear();
     return `${dayName} ${dayNum} ${monthName} ${year}`;
+  };
+
+  // Format date without year for annual recurring dates: "26 janvier"
+  const formatFrenchDateWithoutYear = (dateStr?: string): string => {
+    if (!dateStr) return 'Date non définie';
+    const d = parseDateStr(dateStr);
+    const dayNum = d.getDate();
+    const monthName = FRENCH_MONTHS[d.getMonth()];
+    return `${dayNum} ${monthName}`;
   };
 
   // 2. Metrics calculation
@@ -232,9 +244,12 @@ export const ImportedEventsModal: React.FC<ImportedEventsModalProps> = ({
   }, [filteredBlocks, sortOrder]);
 
   // Handle jump to date
-  const handleJumpToDate = (dateStr?: string) => {
+  const handleJumpToDate = (dateStr?: string, isYearlyGroup = false) => {
     if (!dateStr || dateStr === 'sans-date') return;
     const target = parseDateStr(dateStr);
+    if (isYearlyGroup) {
+      target.setFullYear(selectedDate ? selectedDate.getFullYear() : new Date().getFullYear());
+    }
     onSelectDate(target);
     if (onOpenDaySchedule) {
       onOpenDaySchedule();
@@ -245,7 +260,11 @@ export const ImportedEventsModal: React.FC<ImportedEventsModalProps> = ({
   // Handle jump to block
   const handleJumpToBlock = (block: TimeBlock) => {
     if (block.date) {
-      onSelectDate(parseDateStr(block.date));
+      const target = parseDateStr(block.date);
+      if (block.isYearly) {
+        target.setFullYear(selectedDate ? selectedDate.getFullYear() : new Date().getFullYear());
+      }
+      onSelectDate(target);
     }
     if (onSelectBlock) {
       onSelectBlock(block.id);
@@ -485,7 +504,9 @@ export const ImportedEventsModal: React.FC<ImportedEventsModalProps> = ({
           ) : (
             /* Dates grouped list */
             groupedByDate.map(([dateStr, items]) => {
-              const relLabel = getRelativeDayLabel(dateStr);
+              const isYearlyGroup = items.length > 0 && items.every((b) => b.isYearly);
+              const hasYearlyItems = items.some((b) => b.isYearly);
+              const relLabel = isYearlyGroup ? null : getRelativeDayLabel(dateStr);
               const isTodayItem = dateStr === todayStr;
               const isSelectedDate =
                 selectedDate &&
@@ -505,11 +526,32 @@ export const ImportedEventsModal: React.FC<ImportedEventsModalProps> = ({
                   <div className="p-4 sm:px-5 bg-[var(--bg-surface-elevated)] border-b border-[var(--border-card)] flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-[#6C5CE7]" />
+                        {isYearlyGroup ? (
+                          <div className="w-7 h-7 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
+                            <Repeat className="w-3.5 h-3.5" />
+                          </div>
+                        ) : (
+                          <Calendar className="w-4 h-4 text-[#6C5CE7]" />
+                        )}
                         <h3 className="text-sm sm:text-base font-extrabold text-[var(--text-primary)] capitalize">
-                          {formatFrenchDate(dateStr)}
+                          {isYearlyGroup
+                            ? formatFrenchDateWithoutYear(dateStr)
+                            : formatFrenchDate(dateStr)}
                         </h3>
                       </div>
+
+                      {isYearlyGroup && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center gap-1">
+                          <Repeat className="w-3 h-3" />
+                          <span>Rendez-vous annuel (Chaque année)</span>
+                        </span>
+                      )}
+
+                      {!isYearlyGroup && hasYearlyItems && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30">
+                          🔁 Contient un rendez-vous annuel
+                        </span>
+                      )}
 
                       {relLabel && (
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${relLabel.badgeColor}`}>
@@ -526,9 +568,9 @@ export const ImportedEventsModal: React.FC<ImportedEventsModalProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => handleJumpToDate(dateStr)}
+                        onClick={() => handleJumpToDate(dateStr, isYearlyGroup)}
                         className="px-3 py-1.5 rounded-xl bg-[#6C5CE7]/15 hover:bg-[#6C5CE7] text-[#6C5CE7] hover:text-white border border-[#6C5CE7]/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                        title="Ouvrir l'emploi du temps de cette journée"
+                        title={isYearlyGroup ? "Ouvrir cette journée dans l'agenda de cette année" : "Ouvrir l'emploi du temps de cette journée"}
                       >
                         <span>Ouvrir cette journée</span>
                         <ChevronRight className="w-3.5 h-3.5" />
@@ -640,11 +682,23 @@ export const ImportedEventsModal: React.FC<ImportedEventsModalProps> = ({
                                     </span>
                                   </>
                                 )}
+                                {/* Annual Recurrence Badge */}
+                                {block.isYearly && (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center gap-1">
+                                    <Repeat className="w-2.5 h-2.5" />
+                                    <span>Rendez-vous annuel</span>
+                                  </span>
+                                )}
                               </div>
 
                               {/* Location or duration notes */}
                               <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)] flex-wrap">
                                 <span>{isAllDay ? 'Journée entière' : `${block.durationMinutes} minutes`}</span>
+                                {block.isYearly && (
+                                  <span className="text-purple-400 font-semibold flex items-center gap-1">
+                                    • Répété chaque année ({block.date ? block.date.slice(5) : ''})
+                                  </span>
+                                )}
                                 {block.location && (
                                   <span className="flex items-center gap-1 text-[var(--text-secondary)]">
                                     <MapPin className="w-3 h-3 text-[#55E6C1]" />
@@ -659,7 +713,34 @@ export const ImportedEventsModal: React.FC<ImportedEventsModalProps> = ({
                           </div>
 
                           {/* Item quick actions */}
-                          <div className="flex items-center gap-2 self-center shrink-0">
+                          <div className="flex items-center gap-2 self-center shrink-0 flex-wrap">
+                            {/* Toggle Annual recurrence */}
+                            {onUpdateBlock && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onUpdateBlock({
+                                    ...block,
+                                    isYearly: !block.isYearly,
+                                    isRecurring: !block.isYearly,
+                                  });
+                                }}
+                                className={`px-2.5 py-1 rounded-xl border text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                                  block.isYearly
+                                    ? 'bg-purple-500/15 text-purple-400 border-purple-500/30 hover:bg-purple-500/25 shadow-2xs'
+                                    : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border-[var(--border-card)] hover:border-purple-500/30'
+                                }`}
+                                title={
+                                  block.isYearly
+                                    ? 'Rendez-vous annuel actif (se répète chaque année sans année). Cliquer pour désactiver.'
+                                    : 'Cliquer pour faire répéter ce rendez-vous chaque année (annuel sans année).'
+                                }
+                              >
+                                <Repeat className="w-3 h-3" />
+                                <span>{block.isYearly ? 'Annuel (Actif)' : 'Rendre Annuel'}</span>
+                              </button>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => handleJumpToBlock(block)}

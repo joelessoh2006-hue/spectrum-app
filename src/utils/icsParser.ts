@@ -325,6 +325,10 @@ function createEventFromProps(
     rawTitleLower.includes('fete') ||
     rawTitleLower.includes('naissance');
 
+  const rruleStr = (props['RRULE'] || '').toUpperCase();
+  const isYearlyRrule = rruleStr.includes('FREQ=YEARLY');
+  const isYearly = isYearlyRrule || isBirthday;
+
   const isAllDay =
     isDateOnly ||
     durationMinutes >= 1440 ||
@@ -339,7 +343,7 @@ function createEventFromProps(
     ? {
         importAs: 'constraint' as const,
         pillarId: 'constraint',
-        reason: '🎂 Anniversaire / Repère agenda (Journée entière)',
+        reason: '🎂 Anniversaire / Rendez-vous annuel (Journée entière)',
       }
     : isAllDay
     ? {
@@ -365,6 +369,7 @@ function createEventFromProps(
     selectedPillarId: categoryResult.pillarId,
     included: true,
     isAllDay,
+    isYearly,
     classificationReason: categoryResult.reason,
   };
 }

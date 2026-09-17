@@ -538,6 +538,7 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           }}
           onDeleteBlock={onDeleteBlock}
           onDeleteBlocks={onDeleteBlocks}
+          onUpdateBlock={onUpdateBlock}
         />
       </ErrorBoundary>
 

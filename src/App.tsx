@@ -1272,6 +1272,7 @@ export default function App() {
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             onSelectBlock={handleSelectBlock}
+            onUpdateBlock={handleUpdateBlock}
             onOpenAddModal={handleOpenAddBlockModal}
             onOpenProjects={() => setCurrentView('bento')}
             onSeedTemplates={handleSeedTemplates}
