@@ -148,7 +148,24 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {onOpenImportedEvents && (
+            <button
+              type="button"
+              id="calendar-header-imported-btn"
+              onClick={onOpenImportedEvents}
+              className="px-2.5 py-1 text-[11px] font-bold text-[#55E6C1] bg-[#55E6C1]/10 hover:bg-[#55E6C1]/20 border border-[#55E6C1]/40 rounded-xl transition-all active:scale-95 flex items-center gap-1 cursor-pointer shadow-2xs"
+              title="Consulter toutes les dates importées"
+            >
+              <CalendarCheck className="w-3.5 h-3.5" />
+              <span>Dates importées</span>
+              {totalImportedCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-extrabold bg-[#55E6C1] text-black">
+                  {totalImportedCount}
+                </span>
+              )}
+            </button>
+          )}
           <button
             type="button"
             onClick={handleGoToToday}

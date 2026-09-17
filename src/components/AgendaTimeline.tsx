@@ -374,16 +374,16 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
             type="button"
             id="agenda-view-imported-btn"
             onClick={() => setIsImportedModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] border border-[var(--border-card)] text-[var(--text-primary)] text-xs font-bold shadow-2xs transition active:scale-95 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#55E6C1]/10 hover:bg-[#55E6C1]/20 border border-[#55E6C1]/40 hover:border-[#55E6C1] text-[#55E6C1] text-xs font-bold shadow-2xs transition active:scale-95 cursor-pointer ring-1 ring-[#55E6C1]/20"
             title="Consulter toutes les dates et créneaux importés"
           >
             <CalendarCheck className="w-3.5 h-3.5 text-[#55E6C1]" />
             <span>Dates importées</span>
-            {importedBlocksCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-extrabold bg-[#55E6C1]/20 text-[#55E6C1] border border-[#55E6C1]/30">
+            {importedBlocksCount > 0 ? (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-extrabold bg-[#55E6C1] text-black">
                 {importedBlocksCount}
               </span>
-            )}
+            ) : null}
           </button>
 
           {projects && projects.length > 0 && waitingMilestonesCount > 0 && (
