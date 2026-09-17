@@ -531,6 +531,31 @@ export default function App() {
     }
   };
 
+  const handleDeleteBlock = async (blockId: string) => {
+    setTimeBlocks((prev) => prev.filter((b) => b.id !== blockId));
+    if (user) {
+      try {
+        await deleteUserTimeBlock(user.uid, blockId);
+      } catch (err) {
+        console.error('Erreur suppression bloc Firestore:', err);
+      }
+    }
+  };
+
+  const handleDeleteBlocks = async (blockIds: string[]) => {
+    const idsSet = new Set(blockIds);
+    setTimeBlocks((prev) => prev.filter((b) => !idsSet.has(b.id)));
+    if (user) {
+      try {
+        for (const id of blockIds) {
+          await deleteUserTimeBlock(user.uid, id);
+        }
+      } catch (err) {
+        console.error('Erreur suppression blocs Firestore:', err);
+      }
+    }
+  };
+
   // Démarrage rapide d'une session spontanée à la minute précise actuelle
   const handleStartInstantSession = async (options?: {
     pillarId?: string;
@@ -1150,6 +1175,8 @@ export default function App() {
             projects={projects}
             onOpenManagePillars={() => setIsManagePillarsOpen(true)}
             onImportBlocks={handleImportBlocks}
+            onDeleteBlock={handleDeleteBlock}
+            onDeleteBlocks={handleDeleteBlocks}
             onOpenInstantSessionModal={() => setIsInstantSessionModalOpen(true)}
             onStartInstantSession={handleStartInstantSession}
           />

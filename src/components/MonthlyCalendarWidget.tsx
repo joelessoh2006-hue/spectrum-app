@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TimeBlock, DomainId, DomainConfig } from '../types';
 import { DOMAINS } from '../data/mockData';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Sparkles, CalendarCheck } from 'lucide-react';
 
 interface MonthlyCalendarWidgetProps {
   selectedDate: Date;
@@ -10,6 +10,7 @@ interface MonthlyCalendarWidgetProps {
   categories?: DomainConfig[];
   onDayClickScrollToSchedule?: () => void;
   onOpenDaySchedule?: () => void;
+  onOpenImportedEvents?: () => void;
 }
 
 const MONTH_NAMES = [
@@ -26,6 +27,7 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
   categories,
   onDayClickScrollToSchedule,
   onOpenDaySchedule,
+  onOpenImportedEvents,
 }) => {
   // Calendar browsing month/year
   const [viewYear, setViewYear] = useState<number>(selectedDate.getFullYear());
@@ -33,6 +35,21 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
 
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === viewYear && today.getMonth() === viewMonth;
+
+  // Set of dates with imported events from .ics
+  const importedDatesSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const b of blocks) {
+      if (b.date && Boolean(b.sourceCalendar || b.id?.startsWith('imported-'))) {
+        set.add(b.date);
+      }
+    }
+    return set;
+  }, [blocks]);
+
+  const totalImportedCount = useMemo(() => {
+    return blocks.filter((b) => Boolean(b.sourceCalendar || b.id?.startsWith('imported-'))).length;
+  }, [blocks]);
 
   // Previous & Next month navigation
   const handlePrevMonth = () => {
@@ -190,10 +207,12 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
         {/* Days of current month */}
         {Array.from({ length: daysInMonth }).map((_, idx) => {
           const day = idx + 1;
+          const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const selected = isSelected(day);
           const currentDay = isToday(day);
           const domains = getDomainsForDay(viewYear, viewMonth, day);
           const hasBlocks = domains.size > 0;
+          const hasImported = importedDatesSet.has(dateStr);
 
           return (
             <button
@@ -216,6 +235,16 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
                   : 'bg-[var(--bg-surface-elevated)] text-[var(--text-primary)] hover:border-[var(--border-highlight)] border border-[var(--border-card)]'
               }`}
             >
+              {/* Imported .ics Event Indicator Dot */}
+              {hasImported && (
+                <span
+                  className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${
+                    selected ? 'bg-[#55E6C1]' : 'bg-[#55E6C1] ring-1 ring-[var(--bg-surface)]'
+                  }`}
+                  title="Contient des événements importés (.ics)"
+                />
+              )}
+
               <span className="leading-none">{day}</span>
 
               {/* Multipotential Domain Dots Indicator */}
@@ -252,6 +281,18 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
               <span className="truncate max-w-[110px]">{cat.name}</span>
             </div>
           ))}
+
+          {totalImportedCount > 0 && onOpenImportedEvents && (
+            <button
+              type="button"
+              onClick={onOpenImportedEvents}
+              className="inline-flex items-center gap-1.5 text-[11px] font-extrabold text-[#55E6C1] hover:underline bg-[#55E6C1]/10 px-2 py-0.5 rounded-lg border border-[#55E6C1]/25 hover:bg-[#55E6C1]/20 transition cursor-pointer"
+              title="Consulter la liste de toutes les dates et événements importés"
+            >
+              <CalendarCheck className="w-3 h-3" />
+              <span>{totalImportedCount} importé{totalImportedCount > 1 ? 's' : ''}</span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)]">

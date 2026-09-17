@@ -18,6 +18,7 @@ import {
   MapPin,
   Zap,
   UploadCloud,
+  CalendarCheck,
   Calendar as CalendarIcon,
 } from 'lucide-react';
 
@@ -34,6 +35,7 @@ interface DayScheduleSheetProps {
   onShiftDayBlocks?: (minutes: number) => void;
   onOpenAddModal: (pillarId?: string, defaultDateStr?: string) => void;
   onOpenImportModal?: () => void;
+  onOpenImportedModal?: () => void;
   onStartInstantSession?: (options?: {
     pillarId?: string;
     title?: string;
@@ -75,6 +77,7 @@ export const DayScheduleSheet: React.FC<DayScheduleSheetProps> = ({
   onShiftDayBlocks,
   onOpenAddModal,
   onOpenImportModal,
+  onOpenImportedModal,
   onStartInstantSession,
   onOpenInstantSessionModal,
   waitingMilestonesCount = 0,
@@ -426,6 +429,19 @@ export const DayScheduleSheet: React.FC<DayScheduleSheetProps> = ({
               >
                 <UploadCloud className="w-3.5 h-3.5 text-[#6C5CE7]" />
                 <span className="hidden sm:inline">Importer</span>
+              </button>
+            )}
+
+            {onOpenImportedModal && (
+              <button
+                type="button"
+                id="sheet-view-imported-cal-btn"
+                onClick={onOpenImportedModal}
+                className="px-2.5 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--border-card)] border border-[var(--border-card)] text-xs font-bold text-[var(--text-primary)] transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="Voir toutes les dates importées de votre agenda"
+              >
+                <CalendarCheck className="w-3.5 h-3.5 text-[#55E6C1]" />
+                <span className="hidden sm:inline">Dates importées</span>
               </button>
             )}
 

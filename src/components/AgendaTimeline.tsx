@@ -5,6 +5,7 @@ import { MonthlyCalendarWidget } from './MonthlyCalendarWidget';
 import { CategoriesExplorationGrid } from './CategoriesExplorationGrid';
 import { MultipotentialBalanceRadar } from './MultipotentialBalanceRadar';
 import { ImportCalendarModal } from './ImportCalendarModal';
+import { ImportedEventsModal } from './ImportedEventsModal';
 import { WaitingMilestonesDrawer, MilestoneDragData } from './WaitingMilestonesDrawer';
 import { DayScheduleSheet } from './DayScheduleSheet';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -13,6 +14,7 @@ import {
   Plus,
   Sparkles,
   CalendarDays,
+  CalendarCheck,
   RotateCcw,
   Layers,
   UploadCloud,
@@ -37,6 +39,8 @@ interface AgendaTimelineProps {
   projects?: Project[];
   onOpenManagePillars?: () => void;
   onImportBlocks?: (blocks: TimeBlock[]) => void;
+  onDeleteBlock?: (blockId: string) => void;
+  onDeleteBlocks?: (blockIds: string[]) => void;
   onOpenInstantSessionModal?: () => void;
   onStartInstantSession?: (options?: {
     pillarId?: string;
@@ -74,14 +78,22 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   projects = [],
   onOpenManagePillars,
   onImportBlocks,
+  onDeleteBlock,
+  onDeleteBlocks,
   onOpenInstantSessionModal,
   onStartInstantSession,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isDayScheduleOpen, setIsDayScheduleOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isImportedModalOpen, setIsImportedModalOpen] = useState(false);
   const [isMilestonesDrawerOpen, setIsMilestonesDrawerOpen] = useState(false);
   const [draggedMilestone, setDraggedMilestone] = useState<MilestoneDragData | null>(null);
+
+  // Compteur des événements importés (.ics)
+  const importedBlocksCount = useMemo(() => {
+    return blocks.filter((b) => Boolean(b.sourceCalendar || b.id?.startsWith('imported-'))).length;
+  }, [blocks]);
 
   // Update clock every 30 seconds
   useEffect(() => {
@@ -219,6 +231,7 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
         blocks={blocks}
         categories={activeCategories}
         onOpenDaySchedule={() => setIsDayScheduleOpen(true)}
+        onOpenImportedEvents={() => setIsImportedModalOpen(true)}
       />
 
       {/* 2. CARTE ÉLÉGANTE DU JOUR SÉLECTIONNÉ : Aperçu immédiat & Déclencheur du Volet */}
@@ -357,6 +370,22 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
             <span>Importer (.ics)</span>
           </button>
 
+          <button
+            type="button"
+            id="agenda-view-imported-btn"
+            onClick={() => setIsImportedModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] border border-[var(--border-card)] text-[var(--text-primary)] text-xs font-bold shadow-2xs transition active:scale-95 cursor-pointer"
+            title="Consulter toutes les dates et créneaux importés"
+          >
+            <CalendarCheck className="w-3.5 h-3.5 text-[#55E6C1]" />
+            <span>Dates importées</span>
+            {importedBlocksCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-extrabold bg-[#55E6C1]/20 text-[#55E6C1] border border-[#55E6C1]/30">
+                {importedBlocksCount}
+              </span>
+            )}
+          </button>
+
           {projects && projects.length > 0 && waitingMilestonesCount > 0 && (
             <button
               type="button"
@@ -447,6 +476,7 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           onOpenAddModal(pId, dStr || selectedDateString);
         }}
         onOpenImportModal={() => setIsImportModalOpen(true)}
+        onOpenImportedModal={() => setIsImportedModalOpen(true)}
         onStartInstantSession={onStartInstantSession}
         onOpenInstantSessionModal={onOpenInstantSessionModal}
         waitingMilestonesCount={waitingMilestonesCount}
@@ -465,6 +495,32 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
               onImportBlocks(newBlocks);
             }
           }}
+        />
+      </ErrorBoundary>
+
+      {/* Modal Répertoire & Synthèse de toutes les dates et événements importés */}
+      <ErrorBoundary fallbackTitle="Erreur dans la liste des dates importées" onReset={() => setIsImportedModalOpen(false)}>
+        <ImportedEventsModal
+          isOpen={isImportedModalOpen}
+          onClose={() => setIsImportedModalOpen(false)}
+          blocks={blocks}
+          categories={activeCategories}
+          selectedDate={selectedDate}
+          onSelectDate={onSelectDate}
+          onSelectBlock={(bId) => {
+            setIsImportedModalOpen(false);
+            onSelectBlock(bId);
+          }}
+          onOpenDaySchedule={() => {
+            setIsImportedModalOpen(false);
+            setIsDayScheduleOpen(true);
+          }}
+          onOpenImportModal={() => {
+            setIsImportedModalOpen(false);
+            setIsImportModalOpen(true);
+          }}
+          onDeleteBlock={onDeleteBlock}
+          onDeleteBlocks={onDeleteBlocks}
         />
       </ErrorBoundary>
 
