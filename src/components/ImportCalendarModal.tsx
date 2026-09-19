@@ -225,18 +225,18 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
     const toImport = displayedEvents.filter((e) => e.included);
     if (toImport.length === 0) return;
 
-    const newBlocks: TimeBlock[] = toImport.map((evt) => {
+    const newBlocks: TimeBlock[] = toImport.map((evt, idx) => {
       const isConstraint = evt.importAs === 'constraint';
       // When imported as fixed constraint, assign to 'constraint' domain (NOT 'curiosity'!)
       const targetDomain = isConstraint ? 'constraint' : evt.selectedPillarId;
 
       const isBirthday =
-        evt.title.toLowerCase().includes('birthday') ||
-        evt.title.toLowerCase().includes('anniversaire') ||
-        evt.title.toLowerCase().includes('anniv') ||
-        evt.title.toLowerCase().includes('fête') ||
-        evt.title.toLowerCase().includes('fete') ||
-        evt.title.toLowerCase().includes('naissance');
+        (evt.title || '').toLowerCase().includes('birthday') ||
+        (evt.title || '').toLowerCase().includes('anniversaire') ||
+        (evt.title || '').toLowerCase().includes('anniv') ||
+        (evt.title || '').toLowerCase().includes('fête') ||
+        (evt.title || '').toLowerCase().includes('fete') ||
+        (evt.title || '').toLowerCase().includes('naissance');
 
       const isYearly = Boolean(evt.isYearly || isBirthday);
 
@@ -267,8 +267,8 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
       }
 
       return {
-        id: `imported-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        title: evt.title,
+        id: `imported-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+        title: evt.title || 'Événement importé',
         domain: targetDomain,
         date: evt.dateStr,
         startTime,
@@ -286,7 +286,7 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
           ? []
           : [
               {
-                id: `st-${Date.now()}-1`,
+                id: `st-${Date.now()}-${idx}-1`,
                 text: 'Objectif principal de la session',
                 completed: false,
               },
@@ -308,7 +308,7 @@ export const ImportCalendarModal: React.FC<ImportCalendarModalProps> = ({
           .join('\n\n'),
         isFixedConstraint: isConstraint,
         sourceCalendar: 'Calendrier Xiaomi / Google',
-        location: evt.location,
+        location: evt.location || '',
         completed: false,
       };
     });

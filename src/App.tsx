@@ -17,6 +17,8 @@ import {
   saveUserCategory,
   deleteUserCategory,
   saveUserCategoriesBatch,
+  saveUserTimeBlocksBatch,
+  deleteUserTimeBlocksBatch,
   seedUserDefaultCategories,
   seedUserTemplates,
   clearUserTimeBlocks,
@@ -78,8 +80,26 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   // Data State
-  const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>(() => {
+    try {
+      const cached = localStorage.getItem('spectrum_time_blocks_v2');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+  const [projects, setProjects] = useState<Project[]>(() => {
+    try {
+      const cached = localStorage.getItem('spectrum_projects_v2');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
   const [categories, setCategories] = useState<DomainConfig[]>(() => {
     try {
       const cached = localStorage.getItem('spectrum_custom_categories');
@@ -91,6 +111,31 @@ export default function App() {
     return [];
   });
   const [firestoreStatus, setFirestoreStatus] = useState<'connected' | 'error' | 'syncing'>('connected');
+
+  // Miroir de sauvegarde locale pour garantir la résilience contre toute déconnexion ou rafraîchissement
+  useEffect(() => {
+    try {
+      localStorage.setItem('spectrum_time_blocks_v2', JSON.stringify(timeBlocks));
+    } catch (e) {
+      console.warn('Erreur synchronisation localStorage timeBlocks:', e);
+    }
+  }, [timeBlocks]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('spectrum_projects_v2', JSON.stringify(projects));
+    } catch (e) {
+      console.warn('Erreur synchronisation localStorage projects:', e);
+    }
+  }, [projects]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('spectrum_custom_categories', JSON.stringify(categories));
+    } catch (e) {
+      console.warn('Erreur synchronisation localStorage categories:', e);
+    }
+  }, [categories]);
 
   // Modals
   const [isAddBlockOpen, setIsAddBlockOpen] = useState(false);
@@ -148,9 +193,17 @@ export default function App() {
     }
 
     if (!user) {
-      // Si déconnecté après vérification, réinitialiser
-      setTimeBlocks([]);
-      setProjects([]);
+      // Si déconnecté après vérification, préserver la session locale
+      // (NE JAMAIS effacer les blocs importés ni les projets de l'utilisateur)
+      try {
+        const cached = localStorage.getItem('spectrum_time_blocks_v2');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setTimeBlocks(parsed);
+          }
+        }
+      } catch (_) {}
       setFirestoreStatus('connected');
       return;
     }
@@ -165,6 +218,25 @@ export default function App() {
       unsubscribeBlocks = subscribeToUserTimeBlocks(
         user.uid,
         (remoteBlocks) => {
+          // Si Firestore est encore vide mais que l'utilisateur a des blocs locaux (ex: importés avant connexion)
+          if (remoteBlocks.length === 0) {
+            try {
+              const cached = localStorage.getItem('spectrum_time_blocks_v2');
+              if (cached) {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  // Sauvegarde automatique des blocs locaux dans Firestore
+                  saveUserTimeBlocksBatch(user.uid, parsed).catch((e) =>
+                    console.warn('Erreur synchronisation initiale blocs vers Firestore:', e)
+                  );
+                  setTimeBlocks(parsed);
+                  setFirestoreStatus('connected');
+                  return;
+                }
+              }
+            } catch (_) {}
+          }
+
           // Auto-repair existing blocks (e.g., birthdays forced to 09:00-10:00 or assigned to curiosity)
           const repaired = remoteBlocks.map((b) => {
             let mod = false;
@@ -254,7 +326,7 @@ export default function App() {
       unsubscribeProjects?.();
       unsubscribeCategories?.();
     };
-  }, [user]);
+  }, [user, isAuthLoading]);
 
   // Auth Handlers
   const handleLoginWithGoogle = async () => {
@@ -521,16 +593,20 @@ export default function App() {
   const handleAddBlocks = async (newBlocksData: Omit<TimeBlock, 'id'>[]) => {
     const newBlocks: TimeBlock[] = newBlocksData.map((bData, idx) => ({
       ...bData,
-      id: `block-${Date.now()}-${idx}`,
+      id: `block-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
     }));
-    setTimeBlocks((prev) => [...prev, ...newBlocks]);
+    setTimeBlocks((prev) => {
+      const updated = [...prev, ...newBlocks];
+      try {
+        localStorage.setItem('spectrum_time_blocks_v2', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
 
     if (user) {
       setFirestoreStatus('syncing');
       try {
-        for (const b of newBlocks) {
-          await saveUserTimeBlock(user.uid, b);
-        }
+        await saveUserTimeBlocksBatch(user.uid, newBlocks);
         setFirestoreStatus('connected');
       } catch (err) {
         console.error('Erreur création blocs multiples Firestore:', err);
@@ -540,14 +616,20 @@ export default function App() {
   };
 
   const handleImportBlocks = async (newBlocks: TimeBlock[]) => {
-    setTimeBlocks((prev) => [...prev, ...newBlocks]);
+    // 1. Sauvegarde locale immédiate (state + localStorage)
+    setTimeBlocks((prev) => {
+      const updated = [...prev, ...newBlocks];
+      try {
+        localStorage.setItem('spectrum_time_blocks_v2', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
 
+    // 2. Sauvegarde atomique par lot (batch) dans Firestore
     if (user) {
       setFirestoreStatus('syncing');
       try {
-        for (const b of newBlocks) {
-          await saveUserTimeBlock(user.uid, b);
-        }
+        await saveUserTimeBlocksBatch(user.uid, newBlocks);
         setFirestoreStatus('connected');
       } catch (err) {
         console.error('Erreur import calendrier Firestore:', err);
@@ -557,23 +639,32 @@ export default function App() {
   };
 
   const handleClearBlocks = async () => {
+    const currentBlocks = [...timeBlocks];
+    setTimeBlocks([]);
+    try {
+      localStorage.setItem('spectrum_time_blocks_v2', JSON.stringify([]));
+    } catch (_) {}
+
     if (user) {
       setFirestoreStatus('syncing');
       try {
-        await clearUserTimeBlocks(user.uid, timeBlocks);
-        setTimeBlocks([]);
+        await clearUserTimeBlocks(user.uid, currentBlocks);
         setFirestoreStatus('connected');
       } catch (err) {
         console.error('Erreur vidage blocs Firestore:', err);
         setFirestoreStatus('error');
       }
-    } else {
-      setTimeBlocks([]);
     }
   };
 
   const handleDeleteBlock = async (blockId: string) => {
-    setTimeBlocks((prev) => prev.filter((b) => b.id !== blockId));
+    setTimeBlocks((prev) => {
+      const updated = prev.filter((b) => b.id !== blockId);
+      try {
+        localStorage.setItem('spectrum_time_blocks_v2', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
     if (user) {
       try {
         await deleteUserTimeBlock(user.uid, blockId);
@@ -585,12 +676,16 @@ export default function App() {
 
   const handleDeleteBlocks = async (blockIds: string[]) => {
     const idsSet = new Set(blockIds);
-    setTimeBlocks((prev) => prev.filter((b) => !idsSet.has(b.id)));
+    setTimeBlocks((prev) => {
+      const updated = prev.filter((b) => !idsSet.has(b.id));
+      try {
+        localStorage.setItem('spectrum_time_blocks_v2', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
     if (user) {
       try {
-        for (const id of blockIds) {
-          await deleteUserTimeBlock(user.uid, id);
-        }
+        await deleteUserTimeBlocksBatch(user.uid, blockIds);
       } catch (err) {
         console.error('Erreur suppression blocs Firestore:', err);
       }

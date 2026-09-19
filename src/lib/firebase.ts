@@ -281,6 +281,34 @@ export function subscribeToUserProjects(
 }
 
 /**
+ * Nettoie récursivement un objet pour Firestore en supprimant toutes les clés avec `undefined`
+ * pour éviter l'erreur fatale Firestore "Unsupported field value: undefined".
+ */
+export function sanitizeForFirestore<T>(val: T): T {
+  if (val === undefined) {
+    return null as unknown as T;
+  }
+  if (val === null || typeof val !== 'object') {
+    return val;
+  }
+  if (val instanceof Date) {
+    return val;
+  }
+  if (Array.isArray(val)) {
+    return val
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item)) as unknown as T;
+  }
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+    if (v !== undefined) {
+      result[k] = sanitizeForFirestore(v);
+    }
+  }
+  return result as T;
+}
+
+/**
  * Sauvegarde ou mise à jour d'un bloc de temps pour l'utilisateur
  */
 export async function saveUserTimeBlock(userId: string, block: TimeBlock): Promise<void> {
@@ -298,11 +326,11 @@ export async function saveUserTimeBlock(userId: string, block: TimeBlock): Promi
       isCompleted: s.completed,
     }));
 
-    const dataToSave = {
+    const dataToSave = sanitizeForFirestore({
       ...block,
       subtasks,
       checklist,
-    };
+    });
     await setDoc(docRef, dataToSave, { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
@@ -333,11 +361,11 @@ export async function saveUserTimeBlocksBatch(userId: string, blocks: TimeBlock[
           isCompleted: s.completed,
         }));
 
-        const dataToSave = {
+        const dataToSave = sanitizeForFirestore({
           ...block,
           subtasks,
           checklist,
-        };
+        });
         batch.set(docRef, dataToSave, { merge: true });
       }
       await batch.commit();
@@ -361,13 +389,36 @@ export async function deleteUserTimeBlock(userId: string, blockId: string): Prom
 }
 
 /**
+ * Suppression par lot de blocs de temps pour l'utilisateur
+ */
+export async function deleteUserTimeBlocksBatch(userId: string, blockIds: string[]): Promise<void> {
+  if (!blockIds.length) return;
+  const basePath = getUserTimeBlocksPath(userId);
+  try {
+    const CHUNK_SIZE = 400;
+    for (let i = 0; i < blockIds.length; i += CHUNK_SIZE) {
+      const chunk = blockIds.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const id of chunk) {
+        const docRef = doc(db, basePath, id);
+        batch.delete(docRef);
+      }
+      await batch.commit();
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, basePath);
+  }
+}
+
+/**
  * Sauvegarde ou mise à jour d'un projet pour l'utilisateur
  */
 export async function saveUserProject(userId: string, project: Project): Promise<void> {
   const path = `${getUserProjectsPath(userId)}/${project.id}`;
   try {
     const docRef = doc(db, getUserProjectsPath(userId), project.id);
-    await setDoc(docRef, project, { merge: true });
+    const dataToSave = sanitizeForFirestore(project);
+    await setDoc(docRef, dataToSave, { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -394,20 +445,19 @@ export async function seedUserTemplates(
   blocks: TimeBlock[],
   projects: Project[]
 ): Promise<void> {
-  const batch = writeBatch(db);
   const timeblocksPath = getUserTimeBlocksPath(userId);
   const projectsPath = getUserProjectsPath(userId);
 
-  for (const block of blocks) {
-    const ref = doc(db, timeblocksPath, block.id);
-    batch.set(ref, block);
-  }
-  for (const proj of projects) {
-    const ref = doc(db, projectsPath, proj.id);
-    batch.set(ref, proj);
-  }
-
   try {
+    const batch = writeBatch(db);
+    for (const block of blocks) {
+      const ref = doc(db, timeblocksPath, block.id);
+      batch.set(ref, sanitizeForFirestore(block));
+    }
+    for (const proj of projects) {
+      const ref = doc(db, projectsPath, proj.id);
+      batch.set(ref, sanitizeForFirestore(proj));
+    }
     await batch.commit();
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `${timeblocksPath} & ${projectsPath}`);
@@ -419,16 +469,19 @@ export async function seedUserTemplates(
  */
 export async function clearUserTimeBlocks(userId: string, blocks: TimeBlock[]): Promise<void> {
   if (blocks.length === 0) return;
-  const batch = writeBatch(db);
   const path = getUserTimeBlocksPath(userId);
 
-  for (const b of blocks) {
-    const ref = doc(db, path, b.id);
-    batch.delete(ref);
-  }
-
   try {
-    await batch.commit();
+    const CHUNK_SIZE = 400;
+    for (let i = 0; i < blocks.length; i += CHUNK_SIZE) {
+      const chunk = blocks.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const b of chunk) {
+        const ref = doc(db, path, b.id);
+        batch.delete(ref);
+      }
+      await batch.commit();
+    }
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, path);
   }
@@ -441,7 +494,7 @@ export async function saveUserCategory(userId: string, category: DomainConfig): 
   const path = `${getUserCategoriesPath(userId)}/${category.id}`;
   try {
     const docRef = doc(db, getUserCategoriesPath(userId), category.id);
-    const dataToSave = {
+    const dataToSave = sanitizeForFirestore({
       id: category.id,
       name: category.name,
       label: category.label || '',
@@ -451,7 +504,7 @@ export async function saveUserCategory(userId: string, category: DomainConfig): 
       description: category.description || '',
       order: category.order ?? Date.now(),
       createdAt: category.createdAt || new Date().toISOString(),
-    };
+    });
     await setDoc(docRef, dataToSave, { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
