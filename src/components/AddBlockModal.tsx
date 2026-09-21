@@ -29,6 +29,7 @@ interface AddBlockModalProps {
   initialBlock?: TimeBlock | null;
   initialPillarId?: string | null;
   initialProjectId?: string | null;
+  initialMilestoneId?: string | null;
   initialTitle?: string | null;
   initialObjective?: string | null;
   onUpdateBlock?: (block: TimeBlock) => void;
@@ -73,6 +74,7 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
   initialBlock,
   initialPillarId,
   initialProjectId,
+  initialMilestoneId,
   initialTitle,
   initialObjective,
   onUpdateBlock,
@@ -92,6 +94,9 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
   });
   const [selectedProjectId, setSelectedProjectId] = useState<string>(
     initialBlock?.projectId || initialProjectId || ''
+  );
+  const [selectedMilestoneId, setSelectedMilestoneId] = useState<string>(
+    initialBlock?.milestoneId || initialMilestoneId || ''
   );
   const [startTime, setStartTime] = useState(initialBlock?.startTime || '14:00');
   const [endTime, setEndTime] = useState(initialBlock?.endTime || '15:30');
@@ -174,6 +179,7 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
       setTitle(initialBlock.title || '');
       setDomain(initialBlock.domain || initialPillarId || activeCategories[0]?.id || 'tech');
       setSelectedProjectId(initialBlock.projectId || '');
+      setSelectedMilestoneId(initialBlock.milestoneId || '');
       setStartTime(initialBlock.startTime || '14:00');
       setEndTime(initialBlock.endTime || '15:30');
       setGlobalObjective(initialBlock.globalObjective || '');
@@ -222,6 +228,7 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
           : initialPillarId || activeCategories[0]?.id || 'tech';
       setDomain(targetPillar);
       setSelectedProjectId(initialProjectId || '');
+      setSelectedMilestoneId(initialMilestoneId || '');
       setStartTime('14:00');
       setEndTime('15:30');
       setGlobalObjective(
@@ -392,6 +399,7 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
         title: title.trim(),
         domain,
         projectId: selectedProjectId || undefined,
+        milestoneId: selectedMilestoneId || undefined,
         date: isSpecificDate ? scheduledDate : initialBlock.date,
         startTime,
         endTime,
@@ -417,6 +425,7 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
         title: title.trim(),
         domain,
         projectId: selectedProjectId || undefined,
+        milestoneId: selectedMilestoneId || undefined,
         date: scheduledDate,
         startTime,
         endTime,
@@ -444,6 +453,7 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
         title: title.trim(),
         domain,
         projectId: selectedProjectId || undefined,
+        milestoneId: selectedMilestoneId || undefined,
         date: dateStr,
         startTime,
         endTime,
@@ -595,22 +605,63 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
             </div>
 
             {projects.length > 0 && (
-              <div>
-                <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider flex items-center gap-1">
-                  <Layers className="w-3.5 h-3.5" /> Rattacher à un Grand Projet (Optionnel)
-                </label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl px-4 py-2.5 text-xs sm:text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#6C5CE7]"
-                >
-                  <option value="">Aucun projet lié (Session autonome)</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title} ({p.progress}%)
-                    </option>
-                  ))}
-                </select>
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                    <Layers className="w-3.5 h-3.5" /> Rattacher à un Grand Projet (Optionnel)
+                  </label>
+                  <select
+                    value={selectedProjectId}
+                    onChange={(e) => {
+                      const newProjId = e.target.value;
+                      setSelectedProjectId(newProjId);
+                      setSelectedMilestoneId('');
+                    }}
+                    className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl px-4 py-2.5 text-xs sm:text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#6C5CE7]"
+                  >
+                    <option value="">Aucun projet lié (Session autonome)</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title} ({p.progress}%)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Sélecteur de jalon / sous-tâche du projet si le projet en possède */}
+                {(() => {
+                  const currentProj = projects.find((p) => p.id === selectedProjectId);
+                  if (!currentProj || !currentProj.milestones || currentProj.milestones.length === 0) return null;
+                  return (
+                    <div className="pl-3 border-l-2 border-[#6C5CE7]/30 space-y-1 animate-fadeIn">
+                      <label className="block text-[11px] font-bold text-[#6C5CE7] mb-1 uppercase tracking-wider flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Jalon / Sous-tâche spécifique ciblé
+                      </label>
+                      <select
+                        value={selectedMilestoneId}
+                        onChange={(e) => {
+                          const mId = e.target.value;
+                          setSelectedMilestoneId(mId);
+                          if (mId) {
+                            const found = currentProj.milestones.find((m) => m.id === mId);
+                            if (found && !title.trim()) {
+                              setTitle(found.title);
+                              setGlobalObjective(`Accomplir le jalon : ${found.title} (${currentProj.title})`);
+                            }
+                          }
+                        }}
+                        className="w-full bg-[var(--bg-surface-elevated)] border border-[#6C5CE7]/40 rounded-2xl px-3.5 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#6C5CE7]"
+                      >
+                        <option value="">Travailler sur le projet global (aucun jalon spécifique)</option>
+                        {currentProj.milestones.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.completed ? '✓ Fait : ' : '○ À faire : '} {m.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

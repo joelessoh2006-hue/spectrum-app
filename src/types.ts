@@ -45,6 +45,7 @@ export interface TimeBlock {
   checklist?: ChecklistItem[]; // kept for compatibility
   notes: string;
   projectId?: string;
+  milestoneId?: string; // ID optionnel du jalon/sous-tâche spécifique lié au projet
   isFocusSessionActive?: boolean;
   completed?: boolean;
   isFixedConstraint?: boolean; // Vrai si événement importé (contrainte fixe/agenda externe)

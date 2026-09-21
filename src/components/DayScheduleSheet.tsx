@@ -20,6 +20,7 @@ import {
   UploadCloud,
   CalendarCheck,
   Calendar as CalendarIcon,
+  Trash2,
 } from 'lucide-react';
 
 interface DayScheduleSheetProps {
@@ -31,6 +32,7 @@ interface DayScheduleSheetProps {
   categories?: DomainConfig[];
   onSelectBlock: (blockId: string) => void;
   onUpdateBlock?: (block: TimeBlock) => void;
+  onDeleteBlock?: (blockId: string) => void;
   onAddBlock?: (newBlock: Omit<TimeBlock, 'id'>) => void;
   onShiftDayBlocks?: (minutes: number) => void;
   onOpenAddModal: (pillarId?: string, defaultDateStr?: string) => void;
@@ -74,6 +76,7 @@ export const DayScheduleSheet: React.FC<DayScheduleSheetProps> = ({
   categories,
   onSelectBlock,
   onUpdateBlock,
+  onDeleteBlock,
   onShiftDayBlocks,
   onOpenAddModal,
   onOpenImportModal,
@@ -795,6 +798,22 @@ export const DayScheduleSheet: React.FC<DayScheduleSheetProps> = ({
                               +30
                             </button>
                           </div>
+                        )}
+
+                        {onDeleteBlock && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Supprimer cette activité "${block.title}" ?`)) {
+                                onDeleteBlock(block.id);
+                              }
+                            }}
+                            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition cursor-pointer"
+                            title="Supprimer cette activité"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         )}
                       </div>
                     </div>

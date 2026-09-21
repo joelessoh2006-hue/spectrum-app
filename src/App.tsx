@@ -145,6 +145,7 @@ export default function App() {
     title?: string;
     domain?: string;
     projectId?: string;
+    milestoneId?: string;
     objective?: string;
   } | null>(null);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
@@ -545,13 +546,14 @@ export default function App() {
     setIsAddBlockOpen(true);
   };
 
-  const handleScheduleMilestone = (project: Project, milestoneTitle: string) => {
+  const handleScheduleMilestone = (project: Project, milestoneTitle: string, milestoneId?: string) => {
     setEditingBlock(null);
     setSelectedPillarForAdd(project.domain);
     setPrefilledBlockData({
       title: milestoneTitle,
       domain: project.domain,
       projectId: project.id,
+      milestoneId: milestoneId,
       objective: `Accomplir le jalon : ${milestoneTitle} (${project.title})`,
     });
     setIsAddBlockOpen(true);
@@ -1326,9 +1328,13 @@ export default function App() {
               setCurrentView('agenda');
             }}
             onUpdateBlock={handleUpdateBlock}
+            onDeleteBlock={handleDeleteBlock}
             onOpenAddModal={(pillarId) => handleOpenAddBlockModal(pillarId || activeBlock?.domain)}
             onOpenEditModal={handleOpenEditModal}
             categories={categories}
+            projects={projects}
+            onToggleMilestone={handleToggleMilestone}
+            onAddProjectMilestone={handleAddProjectMilestone}
             initialOpenImmersion={autoOpenImmersion}
           />
         )}
@@ -1417,6 +1423,7 @@ export default function App() {
             initialBlock={editingBlock}
             initialPillarId={selectedPillarForAdd}
             initialProjectId={prefilledBlockData?.projectId}
+            initialMilestoneId={prefilledBlockData?.milestoneId}
             initialTitle={prefilledBlockData?.title}
             initialObjective={prefilledBlockData?.objective}
             onUpdateBlock={handleUpdateBlock}

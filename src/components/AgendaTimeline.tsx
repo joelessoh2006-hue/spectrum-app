@@ -200,6 +200,7 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
       title: data.title,
       domain: data.domain,
       projectId: data.projectId,
+      milestoneId: data.milestoneId,
       date: selectedDateString,
       startTime: start,
       endTime: endTimeStr,
@@ -487,6 +488,7 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           onSelectBlock(bId);
         }}
         onUpdateBlock={onUpdateBlock}
+        onDeleteBlock={onDeleteBlock}
         onAddBlock={onAddBlock}
         onShiftDayBlocks={onShiftDayBlocks}
         onOpenAddModal={(pId, dStr) => {

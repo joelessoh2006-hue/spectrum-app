@@ -39,7 +39,7 @@ interface ProjectsDashboardProps {
   onToggleMilestone: (projectId: string, milestoneId: string) => void;
   onAddMilestone?: (projectId: string, title: string) => void;
   onDeleteMilestone?: (projectId: string, milestoneId: string) => void;
-  onScheduleMilestone?: (project: Project, milestoneTitle: string) => void;
+  onScheduleMilestone?: (project: Project, milestoneTitle: string, milestoneId?: string) => void;
   onDeleteProject?: (projectId: string) => void;
   onArchiveProject?: (projectId: string) => void;
   onUnarchiveProject?: (projectId: string) => void;
@@ -704,7 +704,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        onScheduleMilestone(project, m.title);
+                                        onScheduleMilestone(project, m.title, m.id);
                                       }}
                                       className="p-1 text-[var(--text-muted)] hover:text-[#6C5CE7] hover:bg-[var(--bg-surface)] rounded-lg transition-colors cursor-pointer group-hover:text-[var(--text-secondary)]"
                                       title="Planifier ce jalon dans l'Agenda (créer un bloc de temps)"

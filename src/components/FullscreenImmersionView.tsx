@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TimeBlock, DomainConfig } from '../types';
+import { TimeBlock, DomainConfig, Project } from '../types';
 import { getPillarIcon } from '../utils/iconMap';
 import { MarkdownNotesEditor } from './MarkdownNotesEditor';
 import {
@@ -25,6 +25,8 @@ import {
   FileText,
   Clock,
   Zap,
+  Layers,
+  Target,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -52,6 +54,8 @@ interface FullscreenImmersionViewProps {
   onNotesChange: (notes: string) => void;
   onClose: () => void;
   onToggleBlockCompletion: () => void;
+  linkedProject?: Project;
+  onToggleMilestone?: (projectId: string, milestoneId: string) => void;
 }
 
 export const FullscreenImmersionView: React.FC<FullscreenImmersionViewProps> = ({
@@ -65,8 +69,17 @@ export const FullscreenImmersionView: React.FC<FullscreenImmersionViewProps> = (
   onNotesChange,
   onClose,
   onToggleBlockCompletion,
+  linkedProject,
+  onToggleMilestone,
 }) => {
   const Icon = getPillarIcon(domainConfig.iconName);
+
+  // Tab state between session subtasks and project milestones
+  const [taskTab, setTaskTab] = useState<'session' | 'project'>(() => {
+    if (block.milestoneId && linkedProject) return 'project';
+    if (subtasks.length === 0 && linkedProject && (linkedProject.milestones?.length || 0) > 0) return 'project';
+    return 'session';
+  });
 
   // Timer states
   const defaultMinutes = block.durationMinutes || 25;
@@ -527,96 +540,199 @@ export const FullscreenImmersionView: React.FC<FullscreenImmersionViewProps> = (
             </button>
           </div>
 
-          {/* CARTE 2 : VOS 2 OU 3 CASES À COCHER */}
+          {/* CARTE 2 : VOS 2 OU 3 CASES À COCHER / JALONS PROJET */}
           <div className="bg-[#0E131F]/90 border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-xl flex flex-col flex-1">
-            <div className="flex items-center justify-between mb-3 pb-3 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" style={{ color: domainConfig.color }} />
-                <h2 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
-                  Vos 2 ou 3 étapes clés
-                </h2>
-              </div>
+            {/* Header & Tabs */}
+            <div className="flex items-center justify-between mb-3 pb-3 border-b border-white/10 gap-2 flex-wrap">
+              {linkedProject && (linkedProject.milestones?.length || 0) > 0 ? (
+                <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/10 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setTaskTab('session')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                      taskTab === 'session'
+                        ? 'bg-white/15 text-white shadow-xs'
+                        : 'text-white/50 hover:text-white'
+                    }`}
+                  >
+                    Étapes ({completedCount}/{subtasks.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTaskTab('project')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                      taskTab === 'project'
+                        ? 'bg-[#6C5CE7] text-white shadow-xs'
+                        : 'text-white/50 hover:text-white'
+                    }`}
+                  >
+                    <Layers className="w-3 h-3" />
+                    <span>Jalons Projet ({linkedProject.milestones?.filter((m) => m.completed).length || 0}/{linkedProject.milestones?.length || 0})</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" style={{ color: domainConfig.color }} />
+                  <h2 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+                    Vos étapes clés
+                  </h2>
+                </div>
+              )}
+
               <span className="text-xs font-mono text-white/50">
-                {completedCount}/{subtasks.length}
+                {taskTab === 'session'
+                  ? `${completedCount}/${subtasks.length}`
+                  : linkedProject
+                  ? `${linkedProject.progress}%`
+                  : ''}
               </span>
             </div>
 
-            {/* Liste des cases à cocher épurées */}
-            <div className="space-y-2.5 flex-1 overflow-y-auto max-h-56 pr-1">
-              {subtasks.length === 0 ? (
-                <div className="py-6 text-center text-xs text-white/40 italic">
-                  Aucune sous-tâche définie pour l'instant.
-                  <br />
-                  Notez vos 2 ou 3 étapes clés ci-dessous pour garder le cap.
+            {/* Contenu selon l'onglet actif */}
+            {taskTab === 'project' && linkedProject ? (
+              <div className="space-y-2.5 flex-1 overflow-y-auto max-h-56 pr-1">
+                <div className="flex items-center justify-between text-[11px] text-white/50 pb-1">
+                  <span>Grand Projet : <strong className="text-white">{linkedProject.title}</strong></span>
+                  <span>{linkedProject.progress}% complété</span>
                 </div>
-              ) : (
-                subtasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className={`group flex items-start justify-between gap-3 p-3 rounded-2xl border transition-all ${
-                      task.completed
-                        ? 'bg-white/3 border-white/5 text-white/40'
-                        : 'bg-white/5 border-white/10 text-white hover:border-white/20'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onToggleTask(task.id);
-                        triggerSaveBadge();
-                      }}
-                      className="flex items-start gap-3 text-left flex-1 cursor-pointer"
-                    >
-                      <div
-                        className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 mt-0.5 transition ${
-                          task.completed
-                            ? 'bg-[#55E6C1] border-[#55E6C1] text-black shadow-sm'
-                            : 'border-white/30 hover:border-white'
-                        }`}
-                      >
-                        {task.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                      </div>
-
-                      <span
-                        className={`text-xs sm:text-sm leading-snug ${
-                          task.completed ? 'line-through text-white/40' : 'font-medium text-white'
-                        }`}
-                      >
-                        {task.text}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => onDeleteTask(task.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-white/40 hover:text-rose-400 transition"
-                      title="Supprimer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                {(!linkedProject.milestones || linkedProject.milestones.length === 0) ? (
+                  <div className="py-6 text-center text-xs text-white/40 italic">
+                    Aucun jalon dans ce projet.
                   </div>
-                ))
-              )}
-            </div>
+                ) : (
+                  linkedProject.milestones.map((m) => {
+                    const isTarget = block.milestoneId === m.id;
+                    return (
+                      <div
+                        key={m.id}
+                        className={`group flex items-center justify-between gap-3 p-3 rounded-2xl border transition-all ${
+                          isTarget
+                            ? 'bg-[#6C5CE7]/15 border-[#6C5CE7] text-white'
+                            : m.completed
+                            ? 'bg-white/3 border-white/5 text-white/40'
+                            : 'bg-white/5 border-white/10 text-white hover:border-white/20'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onToggleMilestone) {
+                              onToggleMilestone(linkedProject.id, m.id);
+                              triggerSaveBadge();
+                            }
+                          }}
+                          className="flex items-center gap-3 text-left flex-1 cursor-pointer min-w-0"
+                        >
+                          <div
+                            className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition ${
+                              m.completed
+                                ? 'bg-[#55E6C1] border-[#55E6C1] text-black shadow-sm'
+                                : 'border-white/30 hover:border-white'
+                            }`}
+                          >
+                            {m.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          </div>
 
-            {/* Formulaire ajout rapide d'étape */}
-            <form onSubmit={handleAddNewTask} className="mt-4 pt-3 border-t border-white/10 flex items-center gap-2">
-              <input
-                type="text"
-                value={newSubtaskInput}
-                onChange={(e) => setNewSubtaskInput(e.target.value)}
-                placeholder="Ajouter une étape de focus..."
-                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#6C5CE7]"
-              />
-              <button
-                type="submit"
-                disabled={!newSubtaskInput.trim()}
-                className="px-3 py-2 rounded-xl bg-[#6C5CE7] hover:bg-[#5b4bc4] disabled:opacity-40 text-white text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Ajouter</span>
-              </button>
-            </form>
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <span
+                              className={`text-xs sm:text-sm leading-snug truncate ${
+                                m.completed ? 'line-through text-white/40' : 'font-medium text-white'
+                              }`}
+                            >
+                              {m.title}
+                            </span>
+                            {isTarget && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#6C5CE7] text-white text-[10px] font-bold shrink-0">
+                                <Target className="w-2.5 h-2.5" /> Jalon visé
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            ) : (
+              /* Onglet Étapes de session */
+              <>
+                <div className="space-y-2.5 flex-1 overflow-y-auto max-h-56 pr-1">
+                  {subtasks.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-white/40 italic">
+                      Aucune sous-tâche définie pour l'instant.
+                      <br />
+                      Notez vos 2 ou 3 étapes clés ci-dessous pour garder le cap.
+                    </div>
+                  ) : (
+                    subtasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className={`group flex items-start justify-between gap-3 p-3 rounded-2xl border transition-all ${
+                          task.completed
+                            ? 'bg-white/3 border-white/5 text-white/40'
+                            : 'bg-white/5 border-white/10 text-white hover:border-white/20'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onToggleTask(task.id);
+                            triggerSaveBadge();
+                          }}
+                          className="flex items-start gap-3 text-left flex-1 cursor-pointer"
+                        >
+                          <div
+                            className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 mt-0.5 transition ${
+                              task.completed
+                                ? 'bg-[#55E6C1] border-[#55E6C1] text-black shadow-sm'
+                                : 'border-white/30 hover:border-white'
+                            }`}
+                          >
+                            {task.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          </div>
+
+                          <span
+                            className={`text-xs sm:text-sm leading-snug ${
+                              task.completed ? 'line-through text-white/40' : 'font-medium text-white'
+                            }`}
+                          >
+                            {task.text}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => onDeleteTask(task.id)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-white/40 hover:text-rose-400 transition"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Formulaire ajout rapide d'étape */}
+                <form onSubmit={handleAddNewTask} className="mt-4 pt-3 border-t border-white/10 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newSubtaskInput}
+                    onChange={(e) => setNewSubtaskInput(e.target.value)}
+                    placeholder="Ajouter une étape de focus..."
+                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#6C5CE7]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!newSubtaskInput.trim()}
+                    className="px-3 py-2 rounded-xl bg-[#6C5CE7] hover:bg-[#5b4bc4] disabled:opacity-40 text-white text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Ajouter</span>
+                  </button>
+                </form>
+              </>
+            )}
           </div>
         </div>
 

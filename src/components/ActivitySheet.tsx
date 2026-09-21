@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TimeBlock, DomainConfig } from '../types';
+import { TimeBlock, DomainConfig, Project } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { getPillarIcon } from '../utils/iconMap';
 import { PomodoroFlowTimer } from './PomodoroFlowTimer';
@@ -27,6 +27,11 @@ import {
   ListChecks,
   Bell,
   BellOff,
+  Layers,
+  Target,
+  Link2,
+  Unlink,
+  ExternalLink,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -34,9 +39,13 @@ interface ActivitySheetProps {
   block?: TimeBlock | null;
   onBack: () => void;
   onUpdateBlock: (updatedBlock: TimeBlock) => void;
+  onDeleteBlock?: (blockId: string) => void;
   onOpenAddModal?: (pillarId?: string) => void;
   onOpenEditModal?: (block: TimeBlock) => void;
   categories?: DomainConfig[];
+  projects?: Project[];
+  onToggleMilestone?: (projectId: string, milestoneId: string) => void;
+  onAddProjectMilestone?: (projectId: string, title: string) => void;
   initialOpenImmersion?: boolean;
 }
 
@@ -44,9 +53,13 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
   block,
   onBack,
   onUpdateBlock,
+  onDeleteBlock,
   onOpenAddModal,
   onOpenEditModal,
   categories,
+  projects = [],
+  onToggleMilestone,
+  onAddProjectMilestone,
   initialOpenImmersion = false,
 }) => {
   if (!block) {
@@ -292,6 +305,369 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
     showSavedBadge();
   };
 
+  // Grand Projet lié & Jalons / Sous-tâches
+  const linkedProject = projects.find((p) => p.id === block.projectId);
+  const [newProjectMilestoneTitle, setNewProjectMilestoneTitle] = useState('');
+  const [isChangingProject, setIsChangingProject] = useState(false);
+
+  const handleToggleProjectMilestone = (projectId: string, milestoneId: string) => {
+    if (onToggleMilestone) {
+      onToggleMilestone(projectId, milestoneId);
+      try {
+        confetti({
+          particleCount: 25,
+          spread: 60,
+          origin: { y: 0.6 },
+          colors: [domainConfig.color, '#6C5CE7', '#55E6C1', '#ffffff'],
+        });
+      } catch (_) {}
+    }
+  };
+
+  const handleSetTargetMilestone = (milestoneId: string) => {
+    const isTarget = block.milestoneId === milestoneId;
+    onUpdateBlock({
+      ...block,
+      milestoneId: isTarget ? undefined : milestoneId,
+    });
+    showSavedBadge();
+  };
+
+  const handleImportMilestoneToSession = (milestoneTitle: string) => {
+    const alreadyExists = currentSubtasks.some(
+      (st) => st.text.toLowerCase().trim() === milestoneTitle.toLowerCase().trim()
+    );
+    if (alreadyExists) return;
+
+    const newItem = {
+      id: `st-${Date.now()}`,
+      text: milestoneTitle,
+      completed: false,
+    };
+    const updatedSubtasks = [...currentSubtasks, newItem];
+    const updatedChecklist = updatedSubtasks.map((s) => ({
+      id: s.id,
+      title: s.text,
+      isCompleted: s.completed,
+    }));
+    onUpdateBlock({
+      ...block,
+      subtasks: updatedSubtasks,
+      checklist: updatedChecklist,
+    });
+    showSavedBadge();
+  };
+
+  const handleAddMilestoneToProject = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjectMilestoneTitle.trim() || !linkedProject || !onAddProjectMilestone) return;
+    onAddProjectMilestone(linkedProject.id, newProjectMilestoneTitle.trim());
+    setNewProjectMilestoneTitle('');
+    showSavedBadge();
+  };
+
+  const renderProjectMilestonesCard = () => {
+    if (linkedProject) {
+      const completedMilestones = linkedProject.milestones?.filter((m) => m.completed).length || 0;
+      const totalMilestones = linkedProject.milestones?.length || 0;
+
+      return (
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-5 sm:p-6 shadow-sm space-y-4 relative overflow-hidden animate-fadeIn">
+          {/* Accent glow on top right */}
+          <div
+            className="absolute top-0 right-0 w-36 h-36 rounded-full blur-3xl pointer-events-none opacity-10"
+            style={{ backgroundColor: domainConfig.color }}
+          />
+
+          {/* En-tête du Grand Projet */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border-card)]">
+            <div className="flex items-center gap-2.5">
+              <div
+                className="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 shadow-xs border border-[var(--border-card)]"
+                style={{
+                  backgroundColor: `${domainConfig.color}20`,
+                  color: domainConfig.color,
+                }}
+              >
+                <Layers className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                    Grand Projet Associé
+                  </span>
+                  {block.milestoneId && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#6C5CE7]/15 border border-[#6C5CE7]/30 text-[10px] font-bold text-[#6C5CE7]">
+                      <Target className="w-2.5 h-2.5" /> Jalon ciblé
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-base sm:text-lg font-bold text-[var(--text-primary)] leading-tight">
+                  {linkedProject.title}
+                </h3>
+              </div>
+            </div>
+
+            {/* Progression & Actions de rattachement */}
+            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+              <div
+                className="px-3 py-1 rounded-full text-xs font-bold border font-mono flex items-center gap-1.5"
+                style={{
+                  backgroundColor: `${domainConfig.color}15`,
+                  borderColor: `${domainConfig.color}35`,
+                  color: domainConfig.color,
+                }}
+              >
+                <span>
+                  {completedMilestones}/{totalMilestones} jalons
+                </span>
+                <span className="text-[10px] opacity-75">({linkedProject.progress}%)</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsChangingProject(!isChangingProject)}
+                className="p-1.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs font-medium transition cursor-pointer"
+                title="Modifier ou détacher le projet associé"
+              >
+                <Link2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Sélecteur si l'utilisateur veut changer ou détacher le projet */}
+          {isChangingProject && (
+            <div className="p-3 rounded-2xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] space-y-2 animate-fadeIn">
+              <div className="flex items-center justify-between text-xs font-bold text-[var(--text-secondary)]">
+                <span>Rattacher cette session à un autre projet :</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUpdateBlock({ ...block, projectId: undefined, milestoneId: undefined });
+                    setIsChangingProject(false);
+                    showSavedBadge();
+                  }}
+                  className="text-[#FF7675] hover:underline flex items-center gap-1 text-[11px] cursor-pointer"
+                >
+                  <Unlink className="w-3 h-3" /> Détacher du projet
+                </button>
+              </div>
+              <select
+                value={block.projectId || ''}
+                onChange={(e) => {
+                  const newPId = e.target.value;
+                  onUpdateBlock({
+                    ...block,
+                    projectId: newPId || undefined,
+                    milestoneId: undefined,
+                  });
+                  setIsChangingProject(false);
+                  showSavedBadge();
+                }}
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#6C5CE7]"
+              >
+                {projects?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title} ({p.progress}%)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Barre de progression du projet Bento */}
+          <div className="space-y-1">
+            <div className="w-full h-1.5 bg-[var(--bg-surface-elevated)] rounded-full overflow-hidden border border-[var(--border-card)]">
+              <div
+                className="h-full rounded-full transition-all duration-500 ease-out"
+                style={{
+                  width: `${linkedProject.progress}%`,
+                  backgroundColor: domainConfig.color,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Liste des sous-tâches / jalons du projet avec cases à cocher en direct */}
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between flex-wrap gap-1">
+              <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" style={{ color: domainConfig.color }} />
+                <span>Sous-tâches du projet (cochez en direct pendant la session) :</span>
+              </span>
+              <span className="text-[10px] text-[var(--text-muted)]">
+                Synchronisé avec le Dashboard Bento
+              </span>
+            </div>
+
+            {(!linkedProject.milestones || linkedProject.milestones.length === 0) ? (
+              <p className="text-xs text-[var(--text-secondary)] italic py-3 text-center bg-[var(--bg-surface-elevated)] rounded-2xl border border-[var(--border-card)]">
+                Aucun jalon défini dans ce projet. Ajoutez votre première sous-tâche ci-dessous !
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {linkedProject.milestones.map((milestone) => {
+                  const isTarget = block.milestoneId === milestone.id;
+                  return (
+                    <div
+                      key={milestone.id}
+                      className={`group flex items-center justify-between gap-3 p-3 rounded-2xl border transition-all ${
+                        isTarget
+                          ? 'border-[#6C5CE7] bg-[#6C5CE7]/10 shadow-xs'
+                          : milestone.completed
+                          ? 'bg-[var(--bg-surface-elevated)]/60 border-[var(--border-card)] opacity-75'
+                          : 'bg-[var(--bg-surface-elevated)] border-[var(--border-card)] hover:border-[var(--border-highlight)]'
+                      }`}
+                    >
+                      {/* Checkbox interactive pour cocher directement */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleProjectMilestone(linkedProject.id, milestone.id)}
+                        className="flex items-center gap-3 text-left flex-1 cursor-pointer min-w-0"
+                        title="Cocher / décocher cette sous-tâche du projet"
+                      >
+                        <div className="shrink-0">
+                          <div
+                            className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
+                              milestone.completed
+                                ? 'shadow-sm text-white'
+                                : 'border-[var(--border-card)] hover:border-[var(--text-secondary)] bg-transparent'
+                            }`}
+                            style={{
+                              backgroundColor: milestone.completed ? domainConfig.color : 'transparent',
+                              borderColor: milestone.completed ? domainConfig.color : undefined,
+                            }}
+                          >
+                            {milestone.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          <span
+                            className={`text-sm leading-snug transition-all truncate ${
+                              milestone.completed
+                                ? 'line-through text-[var(--text-muted)]'
+                                : 'text-[var(--text-primary)] font-semibold'
+                            }`}
+                          >
+                            {milestone.title}
+                          </span>
+
+                          {isTarget && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#6C5CE7] text-white text-[10px] font-bold tracking-wide shadow-xs shrink-0">
+                              <Target className="w-2.5 h-2.5" /> Jalon visé
+                            </span>
+                          )}
+                        </div>
+                      </button>
+
+                      {/* Actions rapides */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* Définir / retirer comme cible du bloc */}
+                        <button
+                          type="button"
+                          onClick={() => handleSetTargetMilestone(milestone.id)}
+                          className={`p-1.5 rounded-xl text-xs transition cursor-pointer ${
+                            isTarget
+                              ? 'bg-[#6C5CE7] text-white shadow-xs'
+                              : 'text-[var(--text-muted)] hover:text-[#6C5CE7] hover:bg-[var(--bg-surface)]'
+                          }`}
+                          title={
+                            isTarget
+                              ? 'Retirer comme cible prioritaire de cette session'
+                              : 'Définir comme jalon cible pour cette session'
+                          }
+                        >
+                          <Target className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Importer dans les micro-étapes de la session */}
+                        <button
+                          type="button"
+                          onClick={() => handleImportMilestoneToSession(milestone.title)}
+                          className="p-1.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] text-xs transition cursor-pointer opacity-0 group-hover:opacity-100"
+                          title="Importer comme micro-étape pour cette session"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Formulaire pour ajouter une sous-tâche au projet */}
+          {onAddProjectMilestone && (
+            <form onSubmit={handleAddMilestoneToProject} className="flex items-center gap-2 pt-1">
+              <input
+                type="text"
+                placeholder={`Ajouter une sous-tâche à ${linkedProject.title}...`}
+                value={newProjectMilestoneTitle}
+                onChange={(e) => setNewProjectMilestoneTitle(e.target.value)}
+                className="flex-1 bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-xl px-3.5 py-2 text-xs sm:text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7]"
+              />
+              <button
+                type="submit"
+                disabled={!newProjectMilestoneTitle.trim()}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-40 text-white shadow-xs cursor-pointer"
+                style={{
+                  backgroundColor: domainConfig.color,
+                }}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Ajouter</span>
+              </button>
+            </form>
+          )}
+        </div>
+      );
+    }
+
+    if (projects && projects.length > 0) {
+      return (
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[var(--bg-surface-elevated)] text-[var(--text-muted)] flex items-center justify-center border border-[var(--border-card)] shrink-0">
+              <Layers className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs sm:text-sm font-bold text-[var(--text-primary)]">
+                Rattacher à un Grand Projet Bento
+              </p>
+              <p className="text-[11px] text-[var(--text-secondary)]">
+                Liez ce bloc à un projet pour afficher et cocher ses sous-tâches en direct.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <select
+              value=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  onUpdateBlock({ ...block, projectId: e.target.value });
+                  showSavedBadge();
+                }
+              }}
+              className="bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[#6C5CE7] cursor-pointer"
+            >
+              <option value="">Associer un projet...</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title} ({p.progress}%)
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div className="pb-32 max-w-3xl mx-auto px-4 pt-4 text-[var(--text-primary)] font-['Plus_Jakarta_Sans',sans-serif] space-y-6">
       {/* Top action navigation */}
@@ -336,6 +712,23 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
               className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--bg-surface)] border border-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[#6C5CE7] transition"
             >
               Modifier le bloc
+            </button>
+          )}
+
+          {onDeleteBlock && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Supprimer définitivement l'activité "${block.title}" ?`)) {
+                  onDeleteBlock(block.id);
+                  onBack();
+                }
+              }}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/10 border border-rose-500/25 text-rose-500 hover:bg-rose-500 hover:text-white transition flex items-center gap-1.5 cursor-pointer"
+              title="Supprimer cette activité"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Supprimer</span>
             </button>
           )}
         </div>
@@ -604,6 +997,9 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Sous-tâches du Grand Projet Associé (Accessible aussi en mode Zen) */}
+          {renderProjectMilestonesCard()}
         </div>
       ) : (
         /* =========================================================================
@@ -651,14 +1047,22 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
             onOpenFullscreenZen={() => setIsImmersionOpen(true)}
           />
 
-          {/* 2. SOUS-CHECKLIST INTERACTIVE AVEC % */}
+          {/* SECTION SOUS-TÂCHES DU GRAND PROJET ASSOCIÉ */}
+          {renderProjectMilestonesCard()}
+
+          {/* 2. SOUS-CHECKLIST INTERACTIVE DE LA SESSION */}
           <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5" style={{ color: domainConfig.color }} />
-                <h2 className="text-base font-bold text-[var(--text-primary)]">
-                  Étapes du Projet / Checklist
-                </h2>
+                <div>
+                  <h2 className="text-base font-bold text-[var(--text-primary)]">
+                    Micro-étapes de la Session
+                  </h2>
+                  <p className="text-[11px] text-[var(--text-secondary)]">
+                    Checklist d'exécution pour ce bloc ({block.durationMinutes || 25} min)
+                  </p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {totalItems === 0 && showAddSubtasksInZen && (
@@ -823,6 +1227,8 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
           onNotesChange={handleNotesChange}
           onClose={() => setIsImmersionOpen(false)}
           onToggleBlockCompletion={handleToggleBlockCompletion}
+          linkedProject={linkedProject}
+          onToggleMilestone={handleToggleProjectMilestone}
         />
       )}
     </div>
