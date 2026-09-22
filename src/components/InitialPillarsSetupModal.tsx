@@ -360,17 +360,23 @@ export const InitialPillarsSetupModal: React.FC<InitialPillarsSetupModalProps> =
                     </button>
                   ))}
 
-                  <div className="flex items-center gap-1 pl-1">
+                  <div className="flex items-center gap-1.5 pl-1">
                     <input
                       type="color"
+                      value={formColor.startsWith('#') && formColor.length === 7 ? formColor : '#D4AF37'}
+                      onChange={(e) => setFormColor(e.target.value.toUpperCase())}
+                      className="w-7 h-7 rounded-xl cursor-pointer border border-[var(--border-card)] bg-transparent shrink-0"
+                      title="Pipette / Sélecteur visuel"
+                    />
+                    <input
+                      type="text"
                       value={formColor}
                       onChange={(e) => setFormColor(e.target.value)}
-                      className="w-7 h-7 rounded-xl cursor-pointer border border-[var(--border-card)] bg-transparent"
-                      title="Couleur personnalisée"
+                      placeholder="#D4AF37"
+                      maxLength={9}
+                      className="w-18 px-1.5 py-0.5 text-[10px] font-mono rounded-lg bg-[var(--input-bg)] border border-[var(--border-card)] text-[var(--text-primary)] focus:outline-none focus:border-[#6C5CE7]"
+                      title="Code hexadécimal (ex: #D4AF37)"
                     />
-                    <span className="text-[10px] font-mono text-[var(--text-secondary)]">
-                      {formColor}
-                    </span>
                   </div>
                 </div>
               </div>

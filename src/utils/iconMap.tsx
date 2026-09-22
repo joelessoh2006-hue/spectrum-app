@@ -120,6 +120,8 @@ export const PILLAR_ICON_MAP: Record<string, React.ComponentType<{ className?: s
 };
 
 export const PRESET_PILLAR_COLORS = [
+  { hex: '#D4AF37', name: 'Or Impérial (Gold)' },
+  { hex: '#E5C158', name: 'Or Lumineux' },
   { hex: '#6C5CE7', name: 'Violet Électrique' },
   { hex: '#FF7675', name: 'Corail Vif' },
   { hex: '#55E6C1', name: 'Menthe / Turquoise' },

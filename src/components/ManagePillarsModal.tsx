@@ -287,18 +287,24 @@ export const ManagePillarsModal: React.FC<ManagePillarsModalProps> = ({
                     </button>
                   ))}
 
-                  {/* Custom Hex Picker Input */}
+                  {/* Custom Hex Picker & Direct Hex Input */}
                   <div className="flex items-center gap-1.5 pl-2">
                     <input
                       type="color"
+                      value={formColor.startsWith('#') && formColor.length === 7 ? formColor : '#D4AF37'}
+                      onChange={(e) => setFormColor(e.target.value.toUpperCase())}
+                      className="w-8 h-8 rounded-xl cursor-pointer border border-[var(--border-card)] bg-transparent shrink-0"
+                      title="Pipette / Sélecteur visuel"
+                    />
+                    <input
+                      type="text"
                       value={formColor}
                       onChange={(e) => setFormColor(e.target.value)}
-                      className="w-8 h-8 rounded-xl cursor-pointer border border-[var(--border-card)] bg-transparent"
-                      title="Couleur personnalisée"
+                      placeholder="#D4AF37"
+                      maxLength={9}
+                      className="w-20 px-2 py-1 text-[11px] font-mono rounded-lg bg-[var(--input-bg)] border border-[var(--border-card)] text-[var(--text-primary)] focus:outline-none focus:border-[#6C5CE7]"
+                      title="Saisissez un code hexadécimal (ex: #D4AF37 pour Or)"
                     />
-                    <span className="text-[11px] font-mono text-[var(--text-secondary)]">
-                      {formColor}
-                    </span>
                   </div>
                 </div>
               </div>
