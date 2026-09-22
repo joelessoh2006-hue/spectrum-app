@@ -1024,6 +1024,45 @@ export default function App() {
     }
   };
 
+  const handleTransferProject = async (
+    projectId: string,
+    newDomainId: string,
+    options?: { updateTimeBlocksDomain?: boolean }
+  ) => {
+    const target = projects.find((p) => p.id === projectId);
+    if (!target) return;
+
+    const updatedProject: Project = {
+      ...target,
+      domain: newDomainId,
+    };
+
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? updatedProject : p)));
+
+    // Si demandé, mettre à jour également les blocs de temps déjà associés à ce projet
+    let updatedBlocks: TimeBlock[] = [];
+    if (options?.updateTimeBlocksDomain) {
+      setTimeBlocks((prev) => {
+        const next = prev.map((b) => (b.projectId === projectId ? { ...b, domain: newDomainId } : b));
+        updatedBlocks = next.filter((b) => b.projectId === projectId);
+        return next;
+      });
+    }
+
+    if (user) {
+      try {
+        await saveUserProject(user.uid, updatedProject);
+        if (options?.updateTimeBlocksDomain && updatedBlocks.length > 0) {
+          for (const blk of updatedBlocks) {
+            await saveUserTimeBlock(user.uid, blk);
+          }
+        }
+      } catch (err) {
+        console.error('Erreur transfert projet Firestore:', err);
+      }
+    }
+  };
+
   // Dynamic Pillars / Categories CRUD (100% personnalisables)
   const handleSaveCategory = async (cat: DomainConfig) => {
     setCategories((prev) => {
@@ -1353,6 +1392,7 @@ export default function App() {
             onDeleteProject={handleDeleteProject}
             onArchiveProject={handleArchiveProject}
             onUnarchiveProject={handleUnarchiveProject}
+            onTransferProject={handleTransferProject}
             onSaveProjectNotes={handleSaveProjectNotes}
             onAddProjectQuickNote={handleAddProjectQuickNote}
             onDeleteProjectQuickNote={handleDeleteProjectQuickNote}

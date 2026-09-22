@@ -12,6 +12,7 @@ import {
   ExternalLink,
   MessageSquare,
   BookOpen,
+  ArrowRightLeft,
 } from 'lucide-react';
 
 interface ProjectNotesModalProps {
@@ -23,6 +24,7 @@ interface ProjectNotesModalProps {
   onDeleteQuickNote: (projectId: string, noteId: string) => void;
   pillarName?: string;
   pillarColor?: string;
+  onOpenTransfer?: (project: Project) => void;
 }
 
 export const ProjectNotesModal: React.FC<ProjectNotesModalProps> = ({
@@ -34,6 +36,7 @@ export const ProjectNotesModal: React.FC<ProjectNotesModalProps> = ({
   onDeleteQuickNote,
   pillarName = 'Projet Libre',
   pillarColor = '#6C5CE7',
+  onOpenTransfer,
 }) => {
   const [activeTab, setActiveTab] = useState<'notebook' | 'log'>('notebook');
   const [notesContent, setNotesContent] = useState('');
@@ -96,13 +99,29 @@ export const ProjectNotesModal: React.FC<ProjectNotesModalProps> = ({
             </h2>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition cursor-pointer shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onOpenTransfer && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenTransfer(project);
+                }}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-[var(--bg-surface)] hover:bg-[var(--border-card)] border border-[var(--border-card)] text-[var(--text-secondary)] hover:text-[#6C5CE7] transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title="Changer le pilier de ce projet"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5 text-[#6C5CE7]" />
+                <span className="hidden sm:inline">Transférer</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Navigation */}

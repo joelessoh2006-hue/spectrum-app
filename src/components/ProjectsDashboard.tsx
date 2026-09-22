@@ -26,9 +26,11 @@ import {
   Compass,
   FileText,
   StickyNote,
+  ArrowRightLeft,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ProjectNotesModal } from './ProjectNotesModal';
+import { TransferProjectModal } from './TransferProjectModal';
 
 interface ProjectsDashboardProps {
   projects: Project[];
@@ -43,6 +45,7 @@ interface ProjectsDashboardProps {
   onDeleteProject?: (projectId: string) => void;
   onArchiveProject?: (projectId: string) => void;
   onUnarchiveProject?: (projectId: string) => void;
+  onTransferProject?: (projectId: string, newDomainId: string, options?: { updateTimeBlocksDomain?: boolean }) => void;
   onSaveProjectNotes?: (projectId: string, notes: string) => void;
   onAddProjectQuickNote?: (projectId: string, noteText: string) => void;
   onDeleteProjectQuickNote?: (projectId: string, noteId: string) => void;
@@ -64,6 +67,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
   onDeleteProject,
   onArchiveProject,
   onUnarchiveProject,
+  onTransferProject,
   onSaveProjectNotes,
   onAddProjectQuickNote,
   onDeleteProjectQuickNote,
@@ -77,6 +81,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
   const [newMilestoneInputs, setNewMilestoneInputs] = useState<Record<string, string>>({});
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const [selectedProjectForNotes, setSelectedProjectForNotes] = useState<Project | null>(null);
+  const [projectToTransfer, setProjectToTransfer] = useState<Project | null>(null);
   const [activeCardTab, setActiveCardTab] = useState<Record<string, 'milestones' | 'notes'>>({});
 
   // Séparation projets actifs sur le Bento vs Galerie des Trophées archivés
@@ -513,6 +518,16 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                         </div>
 
                         <div className="flex items-center gap-1.5">
+                          {onTransferProject && (
+                            <button
+                              type="button"
+                              onClick={() => setProjectToTransfer(project)}
+                              className="p-1 text-[var(--text-muted)] hover:text-[#6C5CE7] hover:bg-[var(--bg-surface-elevated)] rounded-lg transition cursor-pointer"
+                              title="Transférer vers un autre pilier"
+                            >
+                              <ArrowRightLeft className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setSelectedProjectForNotes(project)}
@@ -1142,6 +1157,16 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
                         </div>
 
                         <div className="flex items-center gap-1.5">
+                          {onTransferProject && (
+                            <button
+                              type="button"
+                              onClick={() => setProjectToTransfer(project)}
+                              className="p-1 text-[var(--text-muted)] hover:text-amber-400 hover:bg-[var(--bg-surface-elevated)] rounded-lg transition cursor-pointer"
+                              title="Transférer ce trophée vers un autre pilier"
+                            >
+                              <ArrowRightLeft className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setSelectedProjectForNotes(project)}
@@ -1375,8 +1400,27 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
           onSaveNotes={(pId, notes) => onSaveProjectNotes?.(pId, notes)}
           onAddQuickNote={(pId, noteText) => onAddProjectQuickNote?.(pId, noteText)}
           onDeleteQuickNote={(pId, noteId) => onDeleteProjectQuickNote?.(pId, noteId)}
+          onOpenTransfer={(proj) => {
+            setProjectToTransfer(proj);
+            setSelectedProjectForNotes(null);
+          }}
           pillarName={getDomainConfig(selectedProjectForNotes.domain).name}
           pillarColor={getDomainConfig(selectedProjectForNotes.domain).color}
+        />
+      )}
+
+      {/* MODAL TRANSFERT DE PROJET ENTRE PILIERS */}
+      {projectToTransfer && (
+        <TransferProjectModal
+          isOpen={!!projectToTransfer}
+          project={
+            projects.find((p) => p.id === projectToTransfer.id) || projectToTransfer
+          }
+          onClose={() => setProjectToTransfer(null)}
+          categories={categories}
+          onTransferProject={(pId, newDomainId, options) => {
+            onTransferProject?.(pId, newDomainId, options);
+          }}
         />
       )}
     </div>
