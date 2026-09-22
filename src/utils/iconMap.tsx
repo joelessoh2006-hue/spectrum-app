@@ -33,9 +33,21 @@ import {
   Radio,
   Gamepad2,
   Folder,
+  DollarSign,
+  CircleDollarSign,
+  Coins,
+  Banknote,
+  Euro,
 } from 'lucide-react';
 
 export const PILLAR_ICON_DEFINITIONS: { name: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { name: 'DollarSign', label: 'Finance & Revenus', icon: DollarSign },
+  { name: 'CircleDollarSign', label: 'Business & Argent', icon: CircleDollarSign },
+  { name: 'Coins', label: 'Investissement & Épargne', icon: Coins },
+  { name: 'Banknote', label: 'Monnaie & Revenus', icon: Banknote },
+  { name: 'Euro', label: 'Finance Euro', icon: Euro },
+  { name: 'Briefcase', label: 'Business & Stratégie', icon: Briefcase },
+  { name: 'Rocket', label: 'Projet & Lancement', icon: Rocket },
   { name: 'Terminal', label: 'Tech & Code', icon: Terminal },
   { name: 'Code2', label: 'Développement', icon: Code2 },
   { name: 'Laptop', label: 'Informatique', icon: Laptop },
@@ -52,8 +64,6 @@ export const PILLAR_ICON_DEFINITIONS: { name: string; label: string; icon: React
   { name: 'Brain', label: 'Neurosciences & Esprit', icon: Brain },
   { name: 'Lightbulb', label: 'Idées & Réflexion', icon: Lightbulb },
   { name: 'GraduationCap', label: 'Études & Formation', icon: GraduationCap },
-  { name: 'Briefcase', label: 'Business & Stratégie', icon: Briefcase },
-  { name: 'Rocket', label: 'Projet & Lancement', icon: Rocket },
   { name: 'Zap', label: 'Énergie & Productivité', icon: Zap },
   { name: 'Dumbbell', label: 'Sport & Santé', icon: Dumbbell },
   { name: 'Heart', label: 'Bien-être & Vie', icon: Heart },
@@ -67,6 +77,12 @@ export const PILLAR_ICON_DEFINITIONS: { name: string; label: string; icon: React
 ];
 
 export const PILLAR_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  DollarSign,
+  Dollar: DollarSign,
+  CircleDollarSign,
+  Coins,
+  Banknote,
+  Euro,
   Terminal,
   Flame,
   Compass,
@@ -118,7 +134,61 @@ export const PRESET_PILLAR_COLORS = [
   { hex: '#636E72', name: 'Ardoise Métal' },
 ];
 
+/**
+ * Suggestions d'émojis populaires pour la personnalisation rapide
+ */
+export const POPULAR_PILLAR_EMOJIS = [
+  '💵', '💰', '💸', '🤑', '💎', '📈', '💼',
+  '💻', '⚡', '🔥', '🎯', '🚀', '🎨', '🎵',
+  '🏋️', '🧠', '📚', '🧘', '🌍', '☕', '🌟'
+];
+
+/**
+ * Détermine si une chaîne est un émoji ou un symbole personnalisé direct
+ */
+export function isCustomEmojiOrSymbol(iconName?: string): boolean {
+  if (!iconName) return false;
+  // S'il commence par "custom:" ou "emoji:" ou si ce n'est pas dans la liste des icônes Lucide connues
+  if (iconName.startsWith('emoji:') || iconName.startsWith('custom:')) return true;
+  // Détection des caractères émojis / unicode étendu ou symboles non alphabétiques courts
+  const isRegisteredLucide = iconName in PILLAR_ICON_MAP;
+  if (isRegisteredLucide) return false;
+  return true;
+}
+
+/**
+ * Extrait le caractère brut si préfixé par emoji: ou custom:
+ */
+export function getRawEmojiOrSymbol(iconName?: string): string {
+  if (!iconName) return '✨';
+  if (iconName.startsWith('emoji:') || iconName.startsWith('custom:')) {
+    return iconName.split(':')[1] || '✨';
+  }
+  return iconName;
+}
+
 export function getPillarIcon(iconName?: string): React.ComponentType<{ className?: string }> {
   if (!iconName) return Sparkles;
+
+  // Si c'est un émoji ou un symbole personnalisé saisi par l'utilisateur
+  if (isCustomEmojiOrSymbol(iconName)) {
+    const raw = getRawEmojiOrSymbol(iconName);
+    const EmojiComponent: React.FC<{ className?: string }> = ({ className = '' }) => {
+      // Extrait les dimensions relatives ou fournit un rendu émoji centré
+      return (
+        <span
+          className={`inline-flex items-center justify-center select-none font-normal leading-none ${className}`}
+          style={{ fontSize: '1.25em' }}
+          role="img"
+          aria-label="Icône personnalisée"
+        >
+          {raw}
+        </span>
+      );
+    };
+    EmojiComponent.displayName = `EmojiIcon_${raw}`;
+    return EmojiComponent;
+  }
+
   return PILLAR_ICON_MAP[iconName] || Sparkles;
 }

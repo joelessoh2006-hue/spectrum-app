@@ -12,11 +12,15 @@ import {
   Palette as PaletteIcon,
   X,
   Info,
+  Smile,
 } from 'lucide-react';
 import {
   PILLAR_ICON_DEFINITIONS,
   PRESET_PILLAR_COLORS,
+  POPULAR_PILLAR_EMOJIS,
   getPillarIcon,
+  isCustomEmojiOrSymbol,
+  getRawEmojiOrSymbol,
 } from '../utils/iconMap';
 
 interface InitialPillarsSetupModalProps {
@@ -371,11 +375,74 @@ export const InitialPillarsSetupModal: React.FC<InitialPillarsSetupModalProps> =
                 </div>
               </div>
 
-              {/* Sélecteur d'icône */}
+              {/* Sélecteur d'icône & Émojis */}
               <div>
-                <label className="block text-xs font-semibold mb-2 text-[var(--text-secondary)]">
-                  Icône représentative
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)]">
+                    Icône illustrative ou Émoji personnalisé
+                  </label>
+                  {isCustomEmojiOrSymbol(formIconName) && (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#6C5CE7]/15 text-[#6C5CE7] font-bold">
+                      Émoji : {getRawEmojiOrSymbol(formIconName)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Saisie personnalisée d'émoji ou symbole libre */}
+                <div className="mb-2 p-2 rounded-2xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-card)] flex items-center justify-center shrink-0 text-sm shadow-xs">
+                      {isCustomEmojiOrSymbol(formIconName) ? (
+                        <span>{getRawEmojiOrSymbol(formIconName)}</span>
+                      ) : (
+                        <Smile className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={isCustomEmojiOrSymbol(formIconName) ? getRawEmojiOrSymbol(formIconName) : ''}
+                        onChange={(e) => {
+                          const val = e.target.value.trim();
+                          if (val) {
+                            setFormIconName(`emoji:${val}`);
+                          } else {
+                            setFormIconName('Sparkles');
+                          }
+                        }}
+                        placeholder="Tapez ou collez un émoji ou symbole (ex: 💵, 🪙, 💰, 💎, 📈...)"
+                        maxLength={12}
+                        className="w-full px-3 py-1.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-card)] text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7] transition"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Suggestions d'émojis rapides */}
+                  <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-thin">
+                    <span className="text-[9px] text-[var(--text-muted)] shrink-0 font-medium mr-1">
+                      Idées :
+                    </span>
+                    {POPULAR_PILLAR_EMOJIS.slice(0, 14).map((emoji) => {
+                      const isSelected = formIconName === `emoji:${emoji}` || formIconName === emoji;
+                      return (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => setFormIconName(`emoji:${emoji}`)}
+                          className={`w-6 h-6 rounded-lg shrink-0 flex items-center justify-center text-xs transition-transform cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#6C5CE7] shadow-sm scale-110 ring-1 ring-[#6C5CE7]'
+                              : 'hover:bg-[var(--bg-surface)] hover:scale-105 opacity-85 hover:opacity-100'
+                          }`}
+                          title={`Choisir l'émoji ${emoji}`}
+                        >
+                          {emoji}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 max-h-36 overflow-y-auto p-1.5 rounded-2xl bg-[var(--bg-surface-elevated)] border border-[var(--border-card)]">
                   {PILLAR_ICON_DEFINITIONS.map((def) => {
                     const Icon = def.icon;
