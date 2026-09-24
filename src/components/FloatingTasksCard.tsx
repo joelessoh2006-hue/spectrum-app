@@ -12,12 +12,17 @@ import {
   ChevronUp,
   Clock,
   ArrowRight,
+  FileText,
+  AlignLeft,
 } from 'lucide-react';
 
 interface FloatingTasksCardProps {
   selectedDate: Date;
   tasks: FloatingTask[];
   onAddTask: (text: string, targetDateStr: string, domainId?: string) => void;
+  onAddBatchTasks?: (
+    taskItems: { text: string; targetDateStr: string; domainId?: string }[]
+  ) => void;
   onToggleTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
   onPlanTaskInAgenda?: (task: FloatingTask) => void;
@@ -28,15 +33,18 @@ export const FloatingTasksCard: React.FC<FloatingTasksCardProps> = ({
   selectedDate,
   tasks,
   onAddTask,
+  onAddBatchTasks,
   onToggleTask,
   onDeleteTask,
   onPlanTaskInAgenda,
   categories = [],
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [isBatchMode, setIsBatchMode] = useState(false);
   const [newTaskText, setNewTaskText] = useState('');
+  const [batchText, setBatchText] = useState('');
   const [selectedPillarId, setSelectedPillarId] = useState<string>('');
-  const [viewDateMode, setViewDateMode] = useState<'selected' | 'tomorrow' | 'all'>('selected');
+  const [viewDateMode, setViewDateMode] = useState<'selected' | 'tomorrow' | 'all'>('tomorrow');
 
   // Dates formatting
   const selectedDateStr = selectedDate.toISOString().split('T')[0];
@@ -56,11 +64,41 @@ export const FloatingTasksCard: React.FC<FloatingTasksCardProps> = ({
   const completedCount = displayedTasks.filter((t) => t.completed).length;
   const totalCount = displayedTasks.length;
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreateSingle = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskText.trim()) return;
     onAddTask(newTaskText.trim(), activeDateStr, selectedPillarId || undefined);
     setNewTaskText('');
+  };
+
+  const handleCreateBatch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!batchText.trim()) return;
+
+    // Découper par ligne et nettoyer les puces Markdown / numéros (- , * , 1. , etc.)
+    const lines = batchText
+      .split('\n')
+      .map((l) => l.replace(/^[-*•\d.]+\s*/, '').trim())
+      .filter((l) => l.length > 0);
+
+    if (lines.length === 0) return;
+
+    if (onAddBatchTasks) {
+      onAddBatchTasks(
+        lines.map((text) => ({
+          text,
+          targetDateStr: activeDateStr,
+          domainId: selectedPillarId || undefined,
+        }))
+      );
+    } else {
+      lines.forEach((line) => {
+        onAddTask(line, activeDateStr, selectedPillarId || undefined);
+      });
+    }
+
+    setBatchText('');
+    setIsBatchMode(false);
   };
 
   return (
@@ -68,8 +106,8 @@ export const FloatingTasksCard: React.FC<FloatingTasksCardProps> = ({
       aria-label="Sas de délestage des tâches flottantes"
       className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-2xl md:rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5 transition-all"
     >
-      {/* Header avec compteur et bouton replier */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Header avec compteur et boutons d'action */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-[#00CEC9]/15 border border-[#00CEC9]/30 flex items-center justify-center text-[#00CEC9] shadow-sm shrink-0">
             <ListTodo className="w-5 h-5" />
@@ -91,20 +129,48 @@ export const FloatingTasksCard: React.FC<FloatingTasksCardProps> = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="p-2 rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
-          aria-label={isExpanded ? 'Replier le sas' : 'Déplier le sas'}
-        >
-          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsBatchMode(!isBatchMode)}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              isBatchMode
+                ? 'bg-[#6C5CE7] text-white border-[#6C5CE7]'
+                : 'bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border-[var(--border-card)]'
+            }`}
+            title="Coller plusieurs lignes d'un coup"
+          >
+            <AlignLeft className="w-3.5 h-3.5" />
+            <span>{isBatchMode ? 'Mode Ligne par Ligne' : 'Coller en Lot (Multi-lignes)'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="p-2 rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
+            aria-label={isExpanded ? 'Replier le sas' : 'Déplier le sas'}
+          >
+            {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
 
       {isExpanded && (
         <div className="space-y-3 pt-1">
           {/* Onglets de bascule rapide : Ce Jour / Lendemain / Toutes */}
-          <div className="flex items-center gap-1.5 p-1 bg-[var(--bg-surface-elevated)] rounded-xl border border-[var(--border-card)] max-w-fit">
+          <div className="flex items-center gap-1.5 p-1 bg-[var(--bg-surface-elevated)] rounded-xl border border-[var(--border-card)] max-w-fit flex-wrap">
+            <button
+              type="button"
+              onClick={() => setViewDateMode('tomorrow')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                viewDateMode === 'tomorrow'
+                  ? 'bg-[#00CEC9] text-black shadow-xs'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <span>Pour demain ({tomorrowDateStr})</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            </button>
             <button
               type="button"
               onClick={() => setViewDateMode('selected')}
@@ -114,19 +180,7 @@ export const FloatingTasksCard: React.FC<FloatingTasksCardProps> = ({
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
-              Jour sélectionné
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewDateMode('tomorrow')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-                viewDateMode === 'tomorrow'
-                  ? 'bg-[#00CEC9] text-black shadow-xs'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <span>Pour demain</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00CEC9] animate-pulse" />
+              Jour sélectionné ({selectedDateStr})
             </button>
             <button
               type="button"
@@ -141,53 +195,99 @@ export const FloatingTasksCard: React.FC<FloatingTasksCardProps> = ({
             </button>
           </div>
 
-          {/* Formulaire d'ajout rapide ultra-fluide */}
-          <form onSubmit={handleCreate} className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                value={newTaskText}
-                onChange={(e) => setNewTaskText(e.target.value)}
-                placeholder={
-                  viewDateMode === 'tomorrow'
-                    ? "Ex: Relire la doc SQL, payer la facture, appeler Marc... (pour demain)"
-                    : "Ex: Tâche à faire aujourd'hui sans heure imposée..."
-                }
-                className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#00CEC9] transition"
+          {/* Formulaire Multi-lignes (Lot) OU Monoligne classique */}
+          {isBatchMode ? (
+            <form onSubmit={handleCreateBatch} className="space-y-2 p-3 bg-[var(--bg-surface-elevated)] rounded-2xl border border-[#6C5CE7]/30">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-[#6C5CE7] flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Colle ta liste complète (une tâche par ligne) :</span>
+                </span>
+                <span className="text-[11px] text-[var(--text-muted)]">
+                  Cible : {viewDateMode === 'tomorrow' ? 'Demain' : 'Aujourd\'hui'}
+                </span>
+              </div>
+              <textarea
+                rows={5}
+                value={batchText}
+                onChange={(e) => setBatchText(e.target.value)}
+                placeholder="- Vérifier si je peux faire l'examen final UVCI&#10;- Apprendre Dev&#10;- Payer la formation d'aquilas&#10;- Finaliser le site de Marième..."
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-xl p-3 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#6C5CE7] transition font-sans leading-relaxed"
               />
-            </div>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[10px] text-[var(--text-muted)]">
+                  {batchText.split('\n').filter((l) => l.trim().length > 0).length} tâche(s) détectée(s)
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBatchText('');
+                      setIsBatchMode(false);
+                    }}
+                    className="px-3 py-1.5 rounded-xl text-xs text-[var(--text-secondary)] hover:bg-[var(--border-card)] transition cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!batchText.trim()}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#6C5CE7] to-[#8A2BE2] hover:brightness-110 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-[#8A2BE2]/25 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Créer toutes les tâches en 1 clic</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleCreateSingle} className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={newTaskText}
+                  onChange={(e) => setNewTaskText(e.target.value)}
+                  placeholder={
+                    viewDateMode === 'tomorrow'
+                      ? "Ex: Relire la doc SQL, payer la facture, appeler Marc... (pour demain)"
+                      : "Ex: Tâche à faire aujourd'hui sans heure imposée..."
+                  }
+                  className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-xl px-3.5 py-2.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[#00CEC9] transition"
+                />
+              </div>
 
-            {categories.length > 0 && (
-              <select
-                value={selectedPillarId}
-                onChange={(e) => setSelectedPillarId(e.target.value)}
-                className="bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs text-[var(--text-secondary)] rounded-xl px-2.5 py-2.5 focus:outline-none focus:border-[#00CEC9] cursor-pointer hidden sm:block"
-                title="Pilier optionnel"
+              {categories.length > 0 && (
+                <select
+                  value={selectedPillarId}
+                  onChange={(e) => setSelectedPillarId(e.target.value)}
+                  className="bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs text-[var(--text-secondary)] rounded-xl px-2.5 py-2.5 focus:outline-none focus:border-[#00CEC9] cursor-pointer hidden sm:block"
+                  title="Pilier optionnel"
+                >
+                  <option value="">Sans pilier</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <button
+                type="submit"
+                disabled={!newTaskText.trim()}
+                className="px-4 py-2.5 rounded-xl bg-[#00CEC9] hover:bg-[#00b5b0] disabled:opacity-40 disabled:pointer-events-none text-black text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer shrink-0"
               >
-                <option value="">Sans pilier</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            <button
-              type="submit"
-              disabled={!newTaskText.trim()}
-              className="px-4 py-2.5 rounded-xl bg-[#00CEC9] hover:bg-[#00b5b0] disabled:opacity-40 disabled:pointer-events-none text-black text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Ajouter</span>
-            </button>
-          </form>
+                <Plus className="w-4 h-4" />
+                <span>Ajouter</span>
+              </button>
+            </form>
+          )}
 
           {/* Liste des tâches flottantes */}
           <div className="space-y-1.5 pt-1">
             {displayedTasks.length === 0 ? (
               <div className="py-5 text-center text-xs text-[var(--text-muted)] border border-dashed border-[var(--border-card)] rounded-xl">
-                <span>Aucune tâche flottante en attente. Déverse ici tes pensées dès que la flemme de planifier se fait sentir.</span>
+                <span>Aucune tâche flottante en attente pour ce filtre. Déverse ici tes pensées dès que la flemme de planifier se fait sentir.</span>
               </div>
             ) : (
               displayedTasks.map((task) => {
@@ -218,7 +318,7 @@ export const FloatingTasksCard: React.FC<FloatingTasksCardProps> = ({
 
                       <div className="min-w-0 flex-1">
                         <span
-                          className={`text-xs block truncate ${
+                          className={`text-xs block ${
                             task.completed
                               ? 'line-through text-[var(--text-muted)]'
                               : 'text-[var(--text-primary)] font-medium'

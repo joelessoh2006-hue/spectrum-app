@@ -145,6 +145,20 @@ export default function App() {
     setFloatingTasks((prev) => [newTask, ...prev]);
   };
 
+  const handleAddBatchFloatingTasks = (
+    taskItems: { text: string; targetDateStr: string; domainId?: string }[]
+  ) => {
+    const newTasks: FloatingTask[] = taskItems.map((item, idx) => ({
+      id: `ft-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
+      text: item.text,
+      targetDate: item.targetDateStr,
+      completed: false,
+      domain: item.domainId,
+      createdAt: new Date().toISOString(),
+    }));
+    setFloatingTasks((prev) => [...newTasks, ...prev]);
+  };
+
   const handleToggleFloatingTask = (taskId: string) => {
     setFloatingTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, completed: !t.completed } : t))
@@ -1449,6 +1463,7 @@ export default function App() {
             onStartInstantSession={handleStartInstantSession}
             floatingTasks={floatingTasks}
             onAddFloatingTask={handleAddFloatingTask}
+            onAddBatchFloatingTasks={handleAddBatchFloatingTasks}
             onToggleFloatingTask={handleToggleFloatingTask}
             onDeleteFloatingTask={handleDeleteFloatingTask}
           />

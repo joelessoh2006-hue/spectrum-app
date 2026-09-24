@@ -52,6 +52,9 @@ interface AgendaTimelineProps {
   }) => void;
   floatingTasks?: FloatingTask[];
   onAddFloatingTask?: (text: string, targetDateStr: string, domainId?: string) => void;
+  onAddBatchFloatingTasks?: (
+    taskItems: { text: string; targetDateStr: string; domainId?: string }[]
+  ) => void;
   onToggleFloatingTask?: (taskId: string) => void;
   onDeleteFloatingTask?: (taskId: string) => void;
 }
@@ -91,6 +94,7 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   onStartInstantSession,
   floatingTasks = [],
   onAddFloatingTask,
+  onAddBatchFloatingTasks,
   onToggleFloatingTask,
   onDeleteFloatingTask,
 }) => {
@@ -391,6 +395,7 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           selectedDate={selectedDate}
           tasks={floatingTasks}
           onAddTask={onAddFloatingTask}
+          onAddBatchTasks={onAddBatchFloatingTasks}
           onToggleTask={onToggleFloatingTask}
           onDeleteTask={onDeleteFloatingTask}
           categories={activeCategories}
