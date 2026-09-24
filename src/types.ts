@@ -22,6 +22,15 @@ export interface Subtask {
   completed: boolean;
 }
 
+export interface FloatingTask {
+  id: string;
+  text: string;
+  targetDate: string; // "YYYY-MM-DD"
+  completed: boolean;
+  domain?: DomainId;
+  createdAt: string;
+}
+
 export interface ChecklistItem {
   id: string;
   title: string;

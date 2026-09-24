@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { DomainId, TimeBlock, DomainConfig, Project } from '../types';
+import { DomainId, TimeBlock, DomainConfig, Project, FloatingTask } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { MonthlyCalendarWidget } from './MonthlyCalendarWidget';
 import { CategoriesExplorationGrid } from './CategoriesExplorationGrid';
@@ -8,6 +8,7 @@ import { ImportCalendarModal } from './ImportCalendarModal';
 import { ImportedEventsModal } from './ImportedEventsModal';
 import { WaitingMilestonesDrawer, MilestoneDragData } from './WaitingMilestonesDrawer';
 import { DayScheduleSheet } from './DayScheduleSheet';
+import { FloatingTasksCard } from './FloatingTasksCard';
 import { ErrorBoundary } from './ErrorBoundary';
 import {
   Clock,
@@ -49,6 +50,10 @@ interface AgendaTimelineProps {
     durationMinutes?: number;
     openInZenFullscreen?: boolean;
   }) => void;
+  floatingTasks?: FloatingTask[];
+  onAddFloatingTask?: (text: string, targetDateStr: string, domainId?: string) => void;
+  onToggleFloatingTask?: (taskId: string) => void;
+  onDeleteFloatingTask?: (taskId: string) => void;
 }
 
 const FRENCH_DAYS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -84,6 +89,10 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   onOpenInstantSessionModal,
   onOpenImportProgram,
   onStartInstantSession,
+  floatingTasks = [],
+  onAddFloatingTask,
+  onToggleFloatingTask,
+  onDeleteFloatingTask,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isDayScheduleOpen, setIsDayScheduleOpen] = useState(false);
@@ -375,6 +384,41 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
           </div>
         )}
       </section>
+
+      {/* SAS DU LENDEMAIN & TÂCHES FLOTTANTES (Brain Dump sans horaire contraint) */}
+      {onAddFloatingTask && onToggleFloatingTask && onDeleteFloatingTask && (
+        <FloatingTasksCard
+          selectedDate={selectedDate}
+          tasks={floatingTasks}
+          onAddTask={onAddFloatingTask}
+          onToggleTask={onToggleFloatingTask}
+          onDeleteTask={onDeleteFloatingTask}
+          categories={activeCategories}
+          onPlanTaskInAgenda={(task) => {
+            if (onAddBlock) {
+              const start = '10:00';
+              const end = '10:45';
+              const newBlock: Omit<TimeBlock, 'id'> = {
+                title: task.text,
+                domain: task.domain || activeCategories[0]?.id || 'perso',
+                date: task.targetDate || selectedDateString,
+                startTime: start,
+                endTime: end,
+                startMinutes: 10 * 60,
+                durationMinutes: 45,
+                isRecurring: false,
+                recurringDays: [],
+                globalObjective: `Réaliser la tâche du sas : ${task.text}`,
+                subtasks: [{ id: `st-${Date.now()}`, text: task.text, completed: false }],
+                notes: `Tâche issue du sas de délestage (créée le ${new Date(task.createdAt).toLocaleDateString('fr-FR')}).`,
+              };
+              onAddBlock(newBlock);
+              onDeleteFloatingTask(task.id);
+              setIsDayScheduleOpen(true);
+            }
+          }}
+        />
+      )}
 
       {/* 3. BANNIÈRE D'ACTIONS RAPIDES : Importation, Jalons & Session Spontanée */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-card)] text-xs">

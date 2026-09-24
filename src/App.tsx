@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User } from 'firebase/auth';
-import { TimeBlock, Project, DomainConfig } from './types';
+import { TimeBlock, Project, DomainConfig, FloatingTask } from './types';
 import { INITIAL_TIME_BLOCKS, INITIAL_PROJECTS, DOMAINS } from './data/mockData';
 import {
   signInWithGoogle,
@@ -112,6 +112,48 @@ export default function App() {
     return [];
   });
   const [firestoreStatus, setFirestoreStatus] = useState<'connected' | 'error' | 'syncing'>('connected');
+
+  // Tâches flottantes (Sas du lendemain & Brain dump sans contrainte horaire)
+  const [floatingTasks, setFloatingTasks] = useState<FloatingTask[]>(() => {
+    try {
+      const cached = localStorage.getItem('spectrum_floating_tasks_v1');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('spectrum_floating_tasks_v1', JSON.stringify(floatingTasks));
+    } catch (e) {
+      console.warn('Erreur synchronisation localStorage floatingTasks:', e);
+    }
+  }, [floatingTasks]);
+
+  const handleAddFloatingTask = (text: string, targetDateStr: string, domainId?: string) => {
+    const newTask: FloatingTask = {
+      id: `ft-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      text,
+      targetDate: targetDateStr,
+      completed: false,
+      domain: domainId,
+      createdAt: new Date().toISOString(),
+    };
+    setFloatingTasks((prev) => [newTask, ...prev]);
+  };
+
+  const handleToggleFloatingTask = (taskId: string) => {
+    setFloatingTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, completed: !t.completed } : t))
+    );
+  };
+
+  const handleDeleteFloatingTask = (taskId: string) => {
+    setFloatingTasks((prev) => prev.filter((t) => t.id !== taskId));
+  };
 
   // Miroir de sauvegarde locale pour garantir la résilience contre toute déconnexion ou rafraîchissement
   useEffect(() => {
@@ -1405,6 +1447,10 @@ export default function App() {
             onOpenInstantSessionModal={() => setIsInstantSessionModalOpen(true)}
             onOpenImportProgram={() => setIsImportProgramOpen(true)}
             onStartInstantSession={handleStartInstantSession}
+            floatingTasks={floatingTasks}
+            onAddFloatingTask={handleAddFloatingTask}
+            onToggleFloatingTask={handleToggleFloatingTask}
+            onDeleteFloatingTask={handleDeleteFloatingTask}
           />
         )}
 

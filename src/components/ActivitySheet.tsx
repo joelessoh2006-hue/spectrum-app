@@ -492,8 +492,8 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
           <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between flex-wrap gap-1">
               <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5" style={{ color: domainConfig.color }} />
-                <span>Sous-tâches du projet (cochez en direct pendant la session) :</span>
+                <Layers className="w-3.5 h-3.5" style={{ color: domainConfig.color }} />
+                <span>Jalons Stratégiques du Projet Bento (14 Jalons Macro) :</span>
               </span>
               <span className="text-[10px] text-[var(--text-muted)]">
                 Synchronisé avec le Dashboard Bento

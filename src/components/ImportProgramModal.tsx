@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DomainConfig, Project, TimeBlock } from '../types';
-import { TASK_MASTER_PRO_PROGRAM, ProgramImportPayload } from '../data/taskMasterProgram';
+import { TASK_MASTER_PRO_PROGRAM, ProgramImportPayload, normalizeProgramPayload } from '../data/taskMasterProgram';
 import { getPillarIcon } from '../utils/iconMap';
 import {
   Sparkles,
@@ -62,7 +62,7 @@ export const ImportProgramModal: React.FC<ImportProgramModalProps> = ({
     if (customJsonText.trim()) {
       try {
         const parsed = JSON.parse(customJsonText);
-        if (parsed.project && parsed.dailyPlan) return parsed;
+        return normalizeProgramPayload(parsed);
       } catch (_) {}
     }
     return TASK_MASTER_PRO_PROGRAM;
@@ -115,9 +115,26 @@ export const ImportProgramModal: React.FC<ImportProgramModalProps> = ({
     setJsonError(null);
     try {
       const parsed = JSON.parse(customJsonText);
-      if (!parsed.project || !parsed.dailyPlan || !Array.isArray(parsed.dailyPlan)) {
-        throw new Error("Le format JSON doit contenir les clés 'project' et 'dailyPlan'.");
+      const normalized = normalizeProgramPayload(parsed);
+      if (!normalized.project || !normalized.dailyPlan || normalized.dailyPlan.length === 0) {
+        throw new Error("Le format JSON doit contenir au minimum un 'project' et des sessions ('weeks' ou 'dailyPlan').");
       }
+
+      // Essayer d'associer automatiquement le pilier si spécifié dans le JSON (ex: "Tech & Code")
+      const requestedPillarName = (normalized.project.pillar || normalized.project.domain || '').toLowerCase();
+      if (requestedPillarName) {
+        const matched = categories.find(
+          (c) =>
+            c.id.toLowerCase() === requestedPillarName ||
+            c.name.toLowerCase().includes(requestedPillarName) ||
+            requestedPillarName.includes(c.name.toLowerCase()) ||
+            requestedPillarName.includes(c.id.toLowerCase())
+        );
+        if (matched) {
+          setSelectedPillarId(matched.id);
+        }
+      }
+
       setActiveTab('overview');
     } catch (err: any) {
       setJsonError(err.message || 'JSON invalide');
@@ -134,7 +151,9 @@ export const ImportProgramModal: React.FC<ImportProgramModalProps> = ({
       description: currentProgram.project.description,
       progress: 0,
       status: 'in_progress',
-      bentoSize: currentProgram.project.bentoSize || 'large',
+      bentoSize: (['small', 'medium', 'large'].includes((currentProgram.project.bentoSize || '').toLowerCase())
+        ? (currentProgram.project.bentoSize!.toLowerCase() as 'small' | 'medium' | 'large')
+        : 'large'),
       milestones: currentProgram.project.milestones.map((m, idx) => ({
         id: `m-prog-${Date.now()}-${idx}`,
         title: m.title,
@@ -145,10 +164,14 @@ export const ImportProgramModal: React.FC<ImportProgramModalProps> = ({
       targetCompletionDate: currentProgram.project.targetCompletionDate,
     };
 
-    // Map milestone indices to created milestone IDs
     const milestoneMap: Record<string, string> = {};
-    currentProgram.project.milestones.forEach((m, idx) => {
-      milestoneMap[m.id] = newProject.milestones[idx].id;
+    (currentProgram.project.milestones || []).forEach((m, idx) => {
+      const generatedId = newProject.milestones[idx]?.id;
+      if (generatedId) {
+        milestoneMap[m.id] = generatedId;
+        milestoneMap[m.id.toLowerCase()] = generatedId;
+        milestoneMap[m.id.toUpperCase()] = generatedId;
+      }
     });
 
     // 2. Prepare TimeBlocks if requested
@@ -461,24 +484,59 @@ export const ImportProgramModal: React.FC<ImportProgramModalProps> = ({
 
           {activeTab === 'json' && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="text-xs font-bold text-[var(--text-primary)]">
-                  Fichier JSON structuré (téléchargeable ou modifiable)
+                  Fichier JSON structuré (téléchargeable, modifiable ou importable)
                 </span>
-                <button
-                  type="button"
-                  onClick={handleDownloadJson}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] border border-[var(--border-card)] text-xs font-bold text-[var(--text-primary)] transition cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5 text-[#00CEC9]" />
-                  <span>Télécharger le .json</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] border border-[var(--border-card)] text-xs font-bold text-[var(--text-primary)] transition cursor-pointer">
+                    <Upload className="w-3.5 h-3.5 text-[#6C5CE7]" />
+                    <span>Charger un .json</span>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            const content = event.target?.result as string;
+                            if (content) {
+                              setCustomJsonText(content);
+                              try {
+                                const parsed = JSON.parse(content);
+                                normalizeProgramPayload(parsed);
+                                setJsonError(null);
+                              } catch (err: any) {
+                                setJsonError(err.message || 'JSON invalide');
+                              }
+                            }
+                          };
+                          reader.readAsText(file);
+                        }
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleDownloadJson}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-card)] border border-[var(--border-card)] text-xs font-bold text-[var(--text-primary)] transition cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#00CEC9]" />
+                    <span>Télécharger le .json</span>
+                  </button>
+                </div>
               </div>
 
               <textarea
                 rows={12}
                 value={customJsonText || JSON.stringify(TASK_MASTER_PRO_PROGRAM, null, 2)}
-                onChange={(e) => setCustomJsonText(e.target.value)}
+                onChange={(e) => {
+                  setCustomJsonText(e.target.value);
+                  setJsonError(null);
+                }}
+                placeholder="Collez ici votre JSON (supporte format weeks, dailyPlan, notebookResources...)"
                 className="w-full bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] rounded-2xl p-3 text-[11px] font-mono text-[var(--text-primary)] focus:outline-none focus:border-[#6C5CE7] leading-relaxed"
               />
 
@@ -489,15 +547,30 @@ export const ImportProgramModal: React.FC<ImportProgramModalProps> = ({
                 </div>
               )}
 
-              {customJsonText && (
-                <button
-                  type="button"
-                  onClick={handleApplyCustomJson}
-                  className="px-3.5 py-1.5 rounded-xl bg-[#6C5CE7] text-white text-xs font-bold transition cursor-pointer"
-                >
-                  Appliquer ce JSON modifié
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {customJsonText && (
+                  <button
+                    type="button"
+                    onClick={handleApplyCustomJson}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#6C5CE7] hover:bg-[#5A4AD1] text-white text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Appliquer et valider ce JSON</span>
+                  </button>
+                )}
+                {customJsonText && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomJsonText('');
+                      setJsonError(null);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--border-card)] text-[var(--text-secondary)] text-xs transition cursor-pointer"
+                  >
+                    Réinitialiser
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

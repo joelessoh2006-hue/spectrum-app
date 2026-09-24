@@ -1,22 +1,48 @@
-import { Project, TimeBlock } from './types';
+import { Project, TimeBlock } from '../types';
 
 export interface ProgramImportPayload {
-  version: string;
+  version?: string;
   project: {
     title: string;
-    domain: string;
-    bentoSize: 'small' | 'medium' | 'large';
+    domain?: string;
+    pillar?: string;
+    bentoSize?: 'small' | 'medium' | 'large' | 'Small' | 'Medium' | 'Large';
     description: string;
-    notes: string;
+    notes?: string;
     targetCompletionDate?: string;
-    tags: string[];
-    milestones: {
+    targetDuration?: string;
+    tags?: string[];
+    milestones?: {
       id: string;
       title: string;
-      completed: boolean;
+      completed?: boolean;
     }[];
   };
-  dailyPlan: {
+  milestones?: {
+    id: string;
+    title: string;
+    completed?: boolean;
+  }[];
+  weeks?: {
+    weekNumber: number;
+    title?: string;
+    color?: string;
+    days: {
+      day: number;
+      agendaBlock: string;
+      milestoneId: string;
+      focusGoal: string;
+      checklist: string[];
+      durationMinutes?: number;
+    }[];
+  }[];
+  notebookResources?: {
+    officialDocs?: { title: string; url: string }[];
+    cheatsheets?: { title: string; url: string }[];
+    vscodeShortcuts?: { shortcut: string; action: string }[];
+    aiAuditChecklist?: string[];
+  };
+  dailyPlan?: {
     dayNumber: number;
     weekNumber: number;
     title: string;
@@ -26,6 +52,127 @@ export interface ProgramImportPayload {
     durationMinutes: number;
     notes?: string;
   }[];
+}
+
+/**
+ * Normalise n'importe quel format JSON de programme (format à plat `dailyPlan` ou hiérarchique `weeks` / `milestones` / `notebookResources`)
+ * vers la structure unifiée attendue par Spectrum.
+ */
+export function normalizeProgramPayload(raw: any): ProgramImportPayload {
+  if (!raw || typeof raw !== 'object') {
+    return TASK_MASTER_PRO_PROGRAM;
+  }
+
+  // 1. Extraire les jalons (soit dans raw.milestones, soit dans raw.project.milestones)
+  let rawMilestones: { id: string; title: string; completed?: boolean }[] = [];
+  if (Array.isArray(raw.milestones)) {
+    rawMilestones = raw.milestones;
+  } else if (raw.project && Array.isArray(raw.project.milestones)) {
+    rawMilestones = raw.project.milestones;
+  }
+
+  const normalizedMilestones = rawMilestones.map((m: any, idx: number) => ({
+    id: m.id ? String(m.id).toLowerCase() : `m-${String(idx + 1).padStart(2, '0')}`,
+    title: m.title || `Jalon ${idx + 1}`,
+    completed: !!m.completed,
+  }));
+
+  // 2. Extraire et synthétiser les notes / carnet de bord à partir de notebookResources ou notes
+  let combinedNotes = raw.project?.notes || '';
+  if (raw.notebookResources && typeof raw.notebookResources === 'object') {
+    const nr = raw.notebookResources;
+    const parts: string[] = [];
+
+    if (Array.isArray(nr.officialDocs) && nr.officialDocs.length > 0) {
+      parts.push(`### 📚 Documentations Officielles\n` + nr.officialDocs.map((d: any) => `- **${d.title}** : ${d.url}`).join('\n'));
+    }
+
+    if (Array.isArray(nr.cheatsheets) && nr.cheatsheets.length > 0) {
+      parts.push(`### 🛠️ Aides-Mémoire & Cheatsheets\n` + nr.cheatsheets.map((c: any) => `- **${c.title}** : ${c.url}`).join('\n'));
+    }
+
+    if (Array.isArray(nr.vscodeShortcuts) && nr.vscodeShortcuts.length > 0) {
+      parts.push(`### ⌨️ Raccourcis VS Code Indispensables\n` + nr.vscodeShortcuts.map((s: any) => `- \`${s.shortcut}\` : ${s.action}`).join('\n'));
+    }
+
+    if (Array.isArray(nr.aiAuditChecklist) && nr.aiAuditChecklist.length > 0) {
+      parts.push(`### 🛡️ Check-list d'Audit du Code généré par IA\n` + nr.aiAuditChecklist.map((item: string, i: number) => `${i + 1}. ${item}`).join('\n'));
+    }
+
+    if (parts.length > 0) {
+      combinedNotes = combinedNotes ? `${combinedNotes}\n\n${parts.join('\n\n')}` : parts.join('\n\n');
+    }
+  }
+
+  // 3. Normaliser le projet
+  const rawSize = (raw.project?.bentoSize || 'large').toLowerCase();
+  const bentoSize = (['small', 'medium', 'large'].includes(rawSize) ? rawSize : 'large') as 'small' | 'medium' | 'large';
+
+  const normalizedProject = {
+    title: raw.project?.title || "Task Master Pro — Dev Web Full-Stack & Audit IA",
+    domain: raw.project?.domain || 'tech',
+    pillar: raw.project?.pillar || 'Tech & Code',
+    bentoSize,
+    description: raw.project?.description || "",
+    notes: combinedNotes,
+    targetCompletionDate: raw.project?.targetCompletionDate || raw.project?.targetDuration || "8 semaines (56 jours)",
+    tags: Array.isArray(raw.project?.tags) ? raw.project.tags : ["Dev Web", "Full-Stack", "JavaScript", "Node.js", "PostgreSQL", "IA"],
+    milestones: normalizedMilestones,
+  };
+
+  // 4. Extraire le dailyPlan (soit directement raw.dailyPlan, soit aplati depuis raw.weeks)
+  const normalizedDailyPlan: {
+    dayNumber: number;
+    weekNumber: number;
+    title: string;
+    milestoneId: string;
+    objective: string;
+    subtasks: string[];
+    durationMinutes: number;
+    notes?: string;
+  }[] = [];
+
+  if (Array.isArray(raw.dailyPlan) && raw.dailyPlan.length > 0) {
+    raw.dailyPlan.forEach((dp: any, idx: number) => {
+      normalizedDailyPlan.push({
+        dayNumber: dp.dayNumber ?? idx + 1,
+        weekNumber: dp.weekNumber ?? Math.ceil((idx + 1) / 7),
+        title: dp.title || `Session ${idx + 1}`,
+        milestoneId: dp.milestoneId ? String(dp.milestoneId).toLowerCase() : (normalizedMilestones[0]?.id || 'm-01'),
+        objective: dp.objective || dp.focusGoal || '',
+        subtasks: Array.isArray(dp.subtasks) ? dp.subtasks : (Array.isArray(dp.checklist) ? dp.checklist : []),
+        durationMinutes: dp.durationMinutes || 120,
+        notes: dp.notes,
+      });
+    });
+  } else if (Array.isArray(raw.weeks) && raw.weeks.length > 0) {
+    raw.weeks.forEach((w: any) => {
+      const weekNum = w.weekNumber || 1;
+      if (Array.isArray(w.days)) {
+        w.days.forEach((d: any) => {
+          normalizedDailyPlan.push({
+            dayNumber: d.day,
+            weekNumber: weekNum,
+            title: d.agendaBlock || `Jour ${d.day}`,
+            milestoneId: d.milestoneId ? String(d.milestoneId).toLowerCase() : 'm-01',
+            objective: d.focusGoal || '',
+            subtasks: Array.isArray(d.checklist) ? d.checklist : [],
+            durationMinutes: d.durationMinutes || 120,
+          });
+        });
+      }
+    });
+  }
+
+  // Trier par jour croissant
+  normalizedDailyPlan.sort((a, b) => a.dayNumber - b.dayNumber);
+
+  return {
+    version: raw.version || "1.0",
+    project: normalizedProject,
+    milestones: normalizedMilestones,
+    dailyPlan: normalizedDailyPlan.length > 0 ? normalizedDailyPlan : TASK_MASTER_PRO_PROGRAM.dailyPlan,
+  };
 }
 
 export const TASK_MASTER_PRO_PROGRAM: ProgramImportPayload = {
