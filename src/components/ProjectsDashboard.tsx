@@ -37,6 +37,7 @@ interface ProjectsDashboardProps {
   timeBlocks?: TimeBlock[];
   onBackToAgenda: () => void;
   onOpenAddModal: () => void;
+  onOpenImportProgram?: () => void;
   onSelectBlock?: (blockId: string) => void;
   onToggleMilestone: (projectId: string, milestoneId: string) => void;
   onAddMilestone?: (projectId: string, title: string) => void;
@@ -59,6 +60,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
   timeBlocks = [],
   onBackToAgenda,
   onOpenAddModal,
+  onOpenImportProgram,
   onSelectBlock,
   onToggleMilestone,
   onAddMilestone,
@@ -215,7 +217,19 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {onOpenImportProgram && (
+            <button
+              onClick={onOpenImportProgram}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-gradient-to-r from-[#6C5CE7]/15 to-[#00CEC9]/15 border border-[#6C5CE7]/35 text-xs font-bold text-[var(--text-primary)] hover:border-[#6C5CE7] transition active:scale-95 shadow-sm cursor-pointer"
+              title="Importer un programme complet (ex: Task Master Pro Dev Web)"
+            >
+              <Sparkles className="w-4 h-4 text-[#00CEC9]" />
+              <span className="hidden sm:inline">Importer un Programme</span>
+              <span className="sm:hidden">Programme</span>
+            </button>
+          )}
+
           {onOpenManagePillars && (
             <button
               onClick={onOpenManagePillars}

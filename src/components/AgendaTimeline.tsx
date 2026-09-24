@@ -42,6 +42,7 @@ interface AgendaTimelineProps {
   onDeleteBlock?: (blockId: string) => void;
   onDeleteBlocks?: (blockIds: string[]) => void;
   onOpenInstantSessionModal?: () => void;
+  onOpenImportProgram?: () => void;
   onStartInstantSession?: (options?: {
     pillarId?: string;
     title?: string;
@@ -81,6 +82,7 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   onDeleteBlock,
   onDeleteBlocks,
   onOpenInstantSessionModal,
+  onOpenImportProgram,
   onStartInstantSession,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -387,6 +389,18 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
             <UploadCloud className="w-3.5 h-3.5 text-[#6C5CE7]" />
             <span>Importer (.ics)</span>
           </button>
+
+          {onOpenImportProgram && (
+            <button
+              type="button"
+              onClick={onOpenImportProgram}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#6C5CE7]/15 to-[#00CEC9]/15 border border-[#6C5CE7]/40 hover:border-[#6C5CE7] text-[var(--text-primary)] text-xs font-bold shadow-2xs transition active:scale-95 cursor-pointer"
+              title="Importer le programme complet Dev Web Task Master Pro"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#00CEC9]" />
+              <span>Programme 8 Semaines</span>
+            </button>
+          )}
 
           <button
             type="button"

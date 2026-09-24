@@ -37,6 +37,7 @@ import { AddProjectModal } from './components/AddProjectModal';
 import { ManagePillarsModal } from './components/ManagePillarsModal';
 import { InitialPillarsSetupModal } from './components/InitialPillarsSetupModal';
 import { InstantSessionModal } from './components/InstantSessionModal';
+import { ImportProgramModal } from './components/ImportProgramModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { NotificationAlertBanner } from './components/NotificationAlertBanner';
 import {
@@ -152,6 +153,7 @@ export default function App() {
   const [isManagePillarsOpen, setIsManagePillarsOpen] = useState(false);
   const [isInitialPillarsSetupOpen, setIsInitialPillarsSetupOpen] = useState(false);
   const [isInstantSessionModalOpen, setIsInstantSessionModalOpen] = useState(false);
+  const [isImportProgramOpen, setIsImportProgramOpen] = useState(false);
   const [autoOpenImmersion, setAutoOpenImmersion] = useState(false);
 
   // 1. Écoute et restauration automatique de l'état d'authentification Firebase
@@ -1063,6 +1065,52 @@ export default function App() {
     }
   };
 
+  const handleImportProgram = async (options: {
+    project: Omit<Project, 'id'>;
+    blocks: Omit<TimeBlock, 'id'>[];
+    targetPillarId: string;
+  }) => {
+    // 1. Création du projet
+    const newProj: Project = {
+      ...options.project,
+      id: `proj-prog-${Date.now()}`,
+    };
+
+    setProjects((prev) => [newProj, ...prev]);
+
+    // 2. Création des blocs de temps associés
+    const newBlocks: TimeBlock[] = options.blocks.map((b, idx) => ({
+      ...b,
+      id: `block-prog-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+      projectId: newProj.id,
+    }));
+
+    if (newBlocks.length > 0) {
+      setTimeBlocks((prev) => {
+        const updated = [...prev, ...newBlocks];
+        try {
+          localStorage.setItem('spectrum_time_blocks_v2', JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      });
+    }
+
+    // 3. Sauvegarde Firestore
+    if (user) {
+      setFirestoreStatus('syncing');
+      try {
+        await saveUserProject(user.uid, newProj);
+        if (newBlocks.length > 0) {
+          await saveUserTimeBlocksBatch(user.uid, newBlocks);
+        }
+        setFirestoreStatus('connected');
+      } catch (err) {
+        console.error('Erreur import programme Firestore:', err);
+        setFirestoreStatus('error');
+      }
+    }
+  };
+
   // Dynamic Pillars / Categories CRUD (100% personnalisables)
   const handleSaveCategory = async (cat: DomainConfig) => {
     setCategories((prev) => {
@@ -1355,6 +1403,7 @@ export default function App() {
             onDeleteBlock={handleDeleteBlock}
             onDeleteBlocks={handleDeleteBlocks}
             onOpenInstantSessionModal={() => setIsInstantSessionModalOpen(true)}
+            onOpenImportProgram={() => setIsImportProgramOpen(true)}
             onStartInstantSession={handleStartInstantSession}
           />
         )}
@@ -1384,6 +1433,7 @@ export default function App() {
             timeBlocks={timeBlocks}
             onBackToAgenda={() => setCurrentView('agenda')}
             onOpenAddModal={() => setIsAddProjectOpen(true)}
+            onOpenImportProgram={() => setIsImportProgramOpen(true)}
             onSelectBlock={handleSelectBlock}
             onToggleMilestone={handleToggleMilestone}
             onAddMilestone={handleAddProjectMilestone}
@@ -1505,6 +1555,15 @@ export default function App() {
         onSavePillars={handleSaveInitialPillars}
         initialCategories={categories}
         userEmail={user?.displayName || user?.email}
+      />
+
+      {/* 14. Modal Import Direct de Programme Structuré (Task Master Pro) */}
+      <ImportProgramModal
+        isOpen={isImportProgramOpen}
+        onClose={() => setIsImportProgramOpen(false)}
+        categories={categories}
+        selectedDate={selectedDate}
+        onImportProgram={handleImportProgram}
       />
     </div>
   );
