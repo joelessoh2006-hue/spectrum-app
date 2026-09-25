@@ -39,5 +39,12 @@ service cloud.firestore {
       allow create, update: if isOwner(userId) && isValidId(categoryId);
       allow delete: if isOwner(userId) && isValidId(categoryId);
     }
+
+    // Collection des objectifs mensuels de l'utilisateur : users/{userId}/monthlygoals/{goalId}
+    match /users/{userId}/monthlygoals/{goalId} {
+      allow get, list: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidId(goalId);
+      allow delete: if isOwner(userId) && isValidId(goalId);
+    }
   }
 }

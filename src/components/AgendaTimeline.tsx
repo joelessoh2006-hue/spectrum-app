@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { DomainId, TimeBlock, DomainConfig, Project, FloatingTask } from '../types';
+import { DomainId, TimeBlock, DomainConfig, Project, FloatingTask, MonthlyGoal } from '../types';
 import { DOMAINS } from '../data/mockData';
 import { MonthlyCalendarWidget } from './MonthlyCalendarWidget';
+import { MonthlyGoalsCard } from './MonthlyGoalsCard';
 import { CategoriesExplorationGrid } from './CategoriesExplorationGrid';
 import { MultipotentialBalanceRadar } from './MultipotentialBalanceRadar';
 import { ImportCalendarModal } from './ImportCalendarModal';
@@ -57,6 +58,24 @@ interface AgendaTimelineProps {
   ) => void;
   onToggleFloatingTask?: (taskId: string) => void;
   onDeleteFloatingTask?: (taskId: string) => void;
+  monthlyGoals?: MonthlyGoal[];
+  onAddMonthlyGoal?: (goal: {
+    title: string;
+    monthKey: string;
+    domainId?: string;
+    projectId?: string;
+    notes?: string;
+  }) => void;
+  onAddBatchMonthlyGoals?: (
+    goalItems: {
+      title: string;
+      monthKey: string;
+      domainId?: string;
+      projectId?: string;
+    }[]
+  ) => void;
+  onToggleMonthlyGoal?: (goalId: string) => void;
+  onDeleteMonthlyGoal?: (goalId: string) => void;
 }
 
 const FRENCH_DAYS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -97,6 +116,11 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   onAddBatchFloatingTasks,
   onToggleFloatingTask,
   onDeleteFloatingTask,
+  monthlyGoals = [],
+  onAddMonthlyGoal,
+  onAddBatchMonthlyGoals,
+  onToggleMonthlyGoal,
+  onDeleteMonthlyGoal,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isDayScheduleOpen, setIsDayScheduleOpen] = useState(false);
@@ -104,6 +128,23 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
   const [isImportedModalOpen, setIsImportedModalOpen] = useState(false);
   const [isMilestonesDrawerOpen, setIsMilestonesDrawerOpen] = useState(false);
   const [draggedMilestone, setDraggedMilestone] = useState<MilestoneDragData | null>(null);
+
+  // Synchronisation du mois visualisé sur le calendrier et la carte des objectifs
+  const [calendarViewDate, setCalendarViewDate] = useState<{ year: number; month: number }>({
+    year: selectedDate.getFullYear(),
+    month: selectedDate.getMonth(),
+  });
+
+  const currentMonthKey = `${calendarViewDate.year}-${String(calendarViewDate.month + 1).padStart(2, '0')}`;
+  const currentMonthName = `${FRENCH_MONTHS[calendarViewDate.month]} ${calendarViewDate.year}`;
+
+  const currentMonthGoals = useMemo(() => {
+    return monthlyGoals.filter((g) => g.monthKey === currentMonthKey);
+  }, [monthlyGoals, currentMonthKey]);
+
+  const completedMonthlyGoalsCount = useMemo(() => {
+    return currentMonthGoals.filter((g) => g.completed).length;
+  }, [currentMonthGoals]);
 
   // Compteur des événements importés (.ics)
   const importedBlocksCount = useMemo(() => {
@@ -242,15 +283,97 @@ export const AgendaTimeline: React.FC<AgendaTimelineProps> = ({
         selectedDate={selectedDate}
         onSelectDate={(date) => {
           onSelectDate(date);
+          setCalendarViewDate({ year: date.getFullYear(), month: date.getMonth() });
           setIsDayScheduleOpen(true);
         }}
         blocks={blocks}
         categories={activeCategories}
         onOpenDaySchedule={() => setIsDayScheduleOpen(true)}
         onOpenImportedEvents={() => setIsImportedModalOpen(true)}
+        onMonthChange={(year, month) => {
+          setCalendarViewDate({ year, month });
+        }}
+        monthlyGoalsCount={currentMonthGoals.length}
+        completedMonthlyGoalsCount={completedMonthlyGoalsCount}
+        onOpenMonthlyGoals={() => {
+          const el = document.getElementById('monthly-goals-section');
+          el?.scrollIntoView({ behavior: 'smooth' });
+        }}
       />
 
-      {/* 2. CARTE ÉLÉGANTE DU JOUR SÉLECTIONNÉ : Aperçu immédiat & Déclencheur du Volet */}
+      {/* 2. OBJECTIFS & PRIORITÉS DU MOIS (Pont stratégique entre Projets Bento et l'Agenda quotidien) */}
+      {onAddMonthlyGoal && onToggleMonthlyGoal && onDeleteMonthlyGoal && (
+        <div id="monthly-goals-section">
+          <MonthlyGoalsCard
+            currentMonthKey={currentMonthKey}
+            monthName={currentMonthName}
+            goals={monthlyGoals}
+            onAddGoal={onAddMonthlyGoal}
+            onAddBatchGoals={onAddBatchMonthlyGoals}
+            onToggleGoal={onToggleMonthlyGoal}
+            onDeleteGoal={onDeleteMonthlyGoal}
+            categories={activeCategories}
+            projects={projects}
+            onPrevMonth={() => {
+              setCalendarViewDate((prev) => {
+                let m = prev.month - 1;
+                let y = prev.year;
+                if (m < 0) {
+                  m = 11;
+                  y -= 1;
+                }
+                return { year: y, month: m };
+              });
+            }}
+            onNextMonth={() => {
+              setCalendarViewDate((prev) => {
+                let m = prev.month + 1;
+                let y = prev.year;
+                if (m > 11) {
+                  m = 0;
+                  y += 1;
+                }
+                return { year: y, month: m };
+              });
+            }}
+            onScheduleGoalInDay={(goal) => {
+              if (onAddBlock) {
+                const start = '10:00';
+                const end = '11:00';
+                const newBlock: Omit<TimeBlock, 'id'> = {
+                  title: `🎯 ${goal.title}`,
+                  domain: goal.domain || activeCategories[0]?.id || 'tech',
+                  projectId: goal.projectId,
+                  date: selectedDateString,
+                  startTime: start,
+                  endTime: end,
+                  startMinutes: 10 * 60,
+                  durationMinutes: 60,
+                  isRecurring: false,
+                  recurringDays: [],
+                  globalObjective: `Avancer sur l'objectif mensuel : ${goal.title}`,
+                  subtasks: [
+                    { id: `st-${Date.now()}-1`, text: `Focus : ${goal.title}`, completed: false },
+                  ],
+                  notes: `Session dédiée à l'objectif de **${currentMonthName}** : **${goal.title}**.`,
+                };
+                onAddBlock(newBlock);
+                setIsDayScheduleOpen(true);
+              }
+            }}
+            onSendGoalToFloatingTasks={(goal) => {
+              if (onAddFloatingTask) {
+                const tomorrow = new Date(selectedDate);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const tomorrowStr = tomorrow.toISOString().split('T')[0];
+                onAddFloatingTask(`🎯 ${goal.title}`, tomorrowStr, goal.domain);
+              }
+            }}
+          />
+        </div>
+      )}
+
+      {/* 3. CARTE ÉLÉGANTE DU JOUR SÉLECTIONNÉ : Aperçu immédiat & Déclencheur du Volet */}
       <section
         id="selected-day-overview-card"
         aria-label="Aperçu de la journée sélectionnée"

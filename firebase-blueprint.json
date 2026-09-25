@@ -61,6 +61,22 @@
         "description": { "type": "string", "maxLength": 500 }
       },
       "required": ["id", "name", "color", "iconName"]
+    },
+    "monthlyGoal": {
+      "title": "MonthlyGoal",
+      "description": "Objectif et priorité mensuelle de l'utilisateur",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "monthKey": { "type": "string", "maxLength": 10 },
+        "title": { "type": "string", "maxLength": 250 },
+        "completed": { "type": "boolean" },
+        "domain": { "type": "string", "maxLength": 128 },
+        "projectId": { "type": "string", "maxLength": 128 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "monthKey", "title", "completed", "createdAt"]
     }
   },
   "firestore": {
@@ -75,6 +91,10 @@
     "/users/{userId}/categories/{categoryId}": {
       "schema": "category",
       "description": "Piliers et catégories personnalisées scopés par utilisateur"
+    },
+    "/users/{userId}/monthlygoals/{goalId}": {
+      "schema": "monthlyGoal",
+      "description": "Objectifs mensuels scopés par utilisateur"
     }
   }
 }

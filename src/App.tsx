@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User } from 'firebase/auth';
-import { TimeBlock, Project, DomainConfig, FloatingTask } from './types';
+import { TimeBlock, Project, DomainConfig, FloatingTask, MonthlyGoal } from './types';
 import { INITIAL_TIME_BLOCKS, INITIAL_PROJECTS, DOMAINS } from './data/mockData';
 import {
   signInWithGoogle,
@@ -10,6 +10,7 @@ import {
   subscribeToUserTimeBlocks,
   subscribeToUserProjects,
   subscribeToUserCategories,
+  subscribeToUserMonthlyGoals,
   saveUserTimeBlock,
   deleteUserTimeBlock,
   saveUserProject,
@@ -19,6 +20,9 @@ import {
   saveUserCategoriesBatch,
   saveUserTimeBlocksBatch,
   deleteUserTimeBlocksBatch,
+  saveUserMonthlyGoal,
+  deleteUserMonthlyGoal,
+  saveUserMonthlyGoalsBatch,
   seedUserDefaultCategories,
   seedUserTemplates,
   clearUserTimeBlocks,
@@ -169,6 +173,134 @@ export default function App() {
     setFloatingTasks((prev) => prev.filter((t) => t.id !== taskId));
   };
 
+  // Objectifs et Priorités Stratégiques du Mois (Pont entre Projets et Agenda Quotidien)
+  const [monthlyGoals, setMonthlyGoals] = useState<MonthlyGoal[]>(() => {
+    try {
+      const cached = localStorage.getItem('spectrum_monthly_goals_v1');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+
+    // Starter defaults pour le mois courant
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return [
+      {
+        id: `mg-seed-1`,
+        monthKey: currentMonthKey,
+        title: "Vérifier et valider l'examen final de la formation UVCI",
+        completed: false,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: `mg-seed-2`,
+        monthKey: currentMonthKey,
+        title: "Monter en puissance en Dev Web & Vibe Coding",
+        completed: false,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: `mg-seed-3`,
+        monthKey: currentMonthKey,
+        title: "Finaliser et livrer le site de Marième",
+        completed: false,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: `mg-seed-4`,
+        monthKey: currentMonthKey,
+        title: "Rechercher un stage & élaborer le plan d'action financier",
+        completed: false,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: `mg-seed-5`,
+        monthKey: currentMonthKey,
+        title: "Glow up mental et physique (sommeil, sport & clarté d'esprit)",
+        completed: false,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('spectrum_monthly_goals_v1', JSON.stringify(monthlyGoals));
+    } catch (e) {
+      console.warn('Erreur synchronisation localStorage monthlyGoals:', e);
+    }
+  }, [monthlyGoals]);
+
+  const handleAddMonthlyGoal = (goalData: {
+    title: string;
+    monthKey: string;
+    domainId?: string;
+    projectId?: string;
+    notes?: string;
+  }) => {
+    const newGoal: MonthlyGoal = {
+      id: `mg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      title: goalData.title,
+      monthKey: goalData.monthKey,
+      completed: false,
+      domain: goalData.domainId,
+      projectId: goalData.projectId,
+      notes: goalData.notes,
+      createdAt: new Date().toISOString(),
+    };
+    setMonthlyGoals((prev) => [newGoal, ...prev]);
+    if (user) {
+      saveUserMonthlyGoal(user.uid, newGoal).catch(console.error);
+    }
+  };
+
+  const handleAddBatchMonthlyGoals = (
+    items: {
+      title: string;
+      monthKey: string;
+      domainId?: string;
+      projectId?: string;
+    }[]
+  ) => {
+    const newGoals: MonthlyGoal[] = items.map((item, idx) => ({
+      id: `mg-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
+      title: item.title,
+      monthKey: item.monthKey,
+      completed: false,
+      domain: item.domainId,
+      projectId: item.projectId,
+      createdAt: new Date().toISOString(),
+    }));
+    setMonthlyGoals((prev) => [...newGoals, ...prev]);
+    if (user) {
+      saveUserMonthlyGoalsBatch(user.uid, newGoals).catch(console.error);
+    }
+  };
+
+  const handleToggleMonthlyGoal = (goalId: string) => {
+    setMonthlyGoals((prev) =>
+      prev.map((g) => {
+        if (g.id === goalId) {
+          const updated = { ...g, completed: !g.completed };
+          if (user) {
+            saveUserMonthlyGoal(user.uid, updated).catch(console.error);
+          }
+          return updated;
+        }
+        return g;
+      })
+    );
+  };
+
+  const handleDeleteMonthlyGoal = (goalId: string) => {
+    setMonthlyGoals((prev) => prev.filter((g) => g.id !== goalId));
+    if (user) {
+      deleteUserMonthlyGoal(user.uid, goalId).catch(console.error);
+    }
+  };
+
   // Miroir de sauvegarde locale pour garantir la résilience contre toute déconnexion ou rafraîchissement
   useEffect(() => {
     try {
@@ -271,6 +403,7 @@ export default function App() {
     let unsubscribeBlocks: (() => void) | undefined;
     let unsubscribeProjects: (() => void) | undefined;
     let unsubscribeCategories: (() => void) | undefined;
+    let unsubscribeMonthlyGoals: (() => void) | undefined;
 
     try {
       // Blocs
@@ -375,6 +508,19 @@ export default function App() {
           console.warn('Erreur écoute catégories utilisateur:', err);
         }
       );
+
+      // Objectifs mensuels de l'utilisateur
+      unsubscribeMonthlyGoals = subscribeToUserMonthlyGoals(
+        user.uid,
+        (remoteGoals) => {
+          if (remoteGoals.length > 0) {
+            setMonthlyGoals(remoteGoals);
+          }
+        },
+        (err) => {
+          console.warn('Erreur écoute objectifs mensuels utilisateur:', err);
+        }
+      );
     } catch (err) {
       console.error('Erreur attachement Firestore listeners:', err);
       setFirestoreStatus('error');
@@ -384,6 +530,7 @@ export default function App() {
       unsubscribeBlocks?.();
       unsubscribeProjects?.();
       unsubscribeCategories?.();
+      unsubscribeMonthlyGoals?.();
     };
   }, [user, isAuthLoading]);
 
@@ -1466,6 +1613,11 @@ export default function App() {
             onAddBatchFloatingTasks={handleAddBatchFloatingTasks}
             onToggleFloatingTask={handleToggleFloatingTask}
             onDeleteFloatingTask={handleDeleteFloatingTask}
+            monthlyGoals={monthlyGoals}
+            onAddMonthlyGoal={handleAddMonthlyGoal}
+            onAddBatchMonthlyGoals={handleAddBatchMonthlyGoals}
+            onToggleMonthlyGoal={handleToggleMonthlyGoal}
+            onDeleteMonthlyGoal={handleDeleteMonthlyGoal}
           />
         )}
 

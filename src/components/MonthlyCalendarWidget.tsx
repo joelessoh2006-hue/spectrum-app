@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { TimeBlock, DomainId, DomainConfig } from '../types';
 import { DOMAINS } from '../data/mockData';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Sparkles, CalendarCheck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Sparkles, CalendarCheck, Target } from 'lucide-react';
 
 interface MonthlyCalendarWidgetProps {
   selectedDate: Date;
@@ -11,6 +11,10 @@ interface MonthlyCalendarWidgetProps {
   onDayClickScrollToSchedule?: () => void;
   onOpenDaySchedule?: () => void;
   onOpenImportedEvents?: () => void;
+  onOpenMonthlyGoals?: () => void;
+  monthlyGoalsCount?: number;
+  completedMonthlyGoalsCount?: number;
+  onMonthChange?: (year: number, month: number) => void;
 }
 
 const MONTH_NAMES = [
@@ -28,6 +32,10 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
   onDayClickScrollToSchedule,
   onOpenDaySchedule,
   onOpenImportedEvents,
+  onOpenMonthlyGoals,
+  monthlyGoalsCount,
+  completedMonthlyGoalsCount,
+  onMonthChange,
 }) => {
   // Calendar browsing month/year
   const [viewYear, setViewYear] = useState<number>(selectedDate.getFullYear());
@@ -53,27 +61,34 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
 
   // Previous & Next month navigation
   const handlePrevMonth = () => {
-    if (viewMonth === 0) {
-      setViewMonth(11);
-      setViewYear((prev) => prev - 1);
-    } else {
-      setViewMonth((prev) => prev - 1);
+    let nextMonth = viewMonth - 1;
+    let nextYear = viewYear;
+    if (nextMonth < 0) {
+      nextMonth = 11;
+      nextYear = viewYear - 1;
     }
+    setViewMonth(nextMonth);
+    setViewYear(nextYear);
+    onMonthChange?.(nextYear, nextMonth);
   };
 
   const handleNextMonth = () => {
-    if (viewMonth === 11) {
-      setViewMonth(0);
-      setViewYear((prev) => prev + 1);
-    } else {
-      setViewMonth((prev) => prev + 1);
+    let nextMonth = viewMonth + 1;
+    let nextYear = viewYear;
+    if (nextMonth > 11) {
+      nextMonth = 0;
+      nextYear = viewYear + 1;
     }
+    setViewMonth(nextMonth);
+    setViewYear(nextYear);
+    onMonthChange?.(nextYear, nextMonth);
   };
 
   const handleGoToToday = () => {
     const now = new Date();
     setViewYear(now.getFullYear());
     setViewMonth(now.getMonth());
+    onMonthChange?.(now.getFullYear(), now.getMonth());
     onSelectDate(now);
   };
 
@@ -149,6 +164,23 @@ export const MonthlyCalendarWidget: React.FC<MonthlyCalendarWidgetProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
+          {onOpenMonthlyGoals && (
+            <button
+              type="button"
+              id="calendar-header-goals-btn"
+              onClick={onOpenMonthlyGoals}
+              className="px-2.5 py-1 text-[11px] font-bold text-[#A29BFE] bg-[#6C5CE7]/15 hover:bg-[#6C5CE7]/25 border border-[#6C5CE7]/40 rounded-xl transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Voir et gérer les objectifs et priorités de ce mois"
+            >
+              <Target className="w-3.5 h-3.5 text-[#6C5CE7]" />
+              <span>Objectifs</span>
+              {monthlyGoalsCount !== undefined && monthlyGoalsCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-extrabold bg-[#6C5CE7] text-white">
+                  {completedMonthlyGoalsCount ?? 0}/{monthlyGoalsCount}
+                </span>
+              )}
+            </button>
+          )}
           {onOpenImportedEvents && (
             <button
               type="button"

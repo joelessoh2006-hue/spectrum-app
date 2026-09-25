@@ -19,7 +19,7 @@ import {
   setPersistence,
   browserLocalPersistence,
 } from 'firebase/auth';
-import { TimeBlock, Project, DomainConfig } from '../types';
+import { TimeBlock, Project, DomainConfig, MonthlyGoal } from '../types';
 
 /**
  * Configuration Firebase officielle pour le projet Spectrum
@@ -148,6 +148,50 @@ export function getUserProjectsPath(userId: string): string {
 
 export function getUserCategoriesPath(userId: string): string {
   return `users/${userId}/categories`;
+}
+
+export function getUserMonthlyGoalsPath(userId: string): string {
+  return `users/${userId}/monthlygoals`;
+}
+
+/**
+ * Écoute temps réel des objectifs mensuels de l'utilisateur connecté
+ * (users/{userId}/monthlygoals)
+ */
+export function subscribeToUserMonthlyGoals(
+  userId: string,
+  onSuccess: (goals: MonthlyGoal[]) => void,
+  onError?: (error: Error) => void
+): () => void {
+  const path = getUserMonthlyGoalsPath(userId);
+  const colRef = collection(db, path);
+
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const goals: MonthlyGoal[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        goals.push({
+          id: docSnap.id,
+          monthKey: data.monthKey || '',
+          title: data.title || '',
+          completed: Boolean(data.completed),
+          domain: data.domain,
+          projectId: data.projectId,
+          notes: data.notes,
+          createdAt: data.createdAt || new Date().toISOString(),
+        });
+      });
+      // Tri antéchronologique
+      goals.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      onSuccess(goals);
+    },
+    (err) => {
+      console.warn('Erreur écoute objectifs mensuels Firestore:', err);
+      onError?.(err as Error);
+    }
+  );
 }
 
 /**
@@ -620,4 +664,60 @@ export async function saveUserCategoriesBatch(
     handleFirestoreError(err, OperationType.WRITE, path);
   }
 }
+
+/**
+ * Enregistre ou met à jour un objectif mensuel pour l'utilisateur
+ */
+export async function saveUserMonthlyGoal(
+  userId: string,
+  goal: MonthlyGoal
+): Promise<void> {
+  const path = `${getUserMonthlyGoalsPath(userId)}/${goal.id}`;
+  try {
+    const docRef = doc(db, getUserMonthlyGoalsPath(userId), goal.id);
+    const dataToSave = sanitizeForFirestore(goal);
+    await setDoc(docRef, dataToSave, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Suppression d'un objectif mensuel pour l'utilisateur
+ */
+export async function deleteUserMonthlyGoal(
+  userId: string,
+  goalId: string
+): Promise<void> {
+  const path = `${getUserMonthlyGoalsPath(userId)}/${goalId}`;
+  try {
+    const docRef = doc(db, getUserMonthlyGoalsPath(userId), goalId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+  }
+}
+
+/**
+ * Enregistrement par lot d'objectifs mensuels
+ */
+export async function saveUserMonthlyGoalsBatch(
+  userId: string,
+  goals: MonthlyGoal[]
+): Promise<void> {
+  const batch = writeBatch(db);
+  const path = getUserMonthlyGoalsPath(userId);
+
+  goals.forEach((goal) => {
+    const ref = doc(db, path, goal.id);
+    batch.set(ref, sanitizeForFirestore(goal), { merge: true });
+  });
+
+  try {
+    await batch.commit();
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
 

@@ -98,6 +98,17 @@ export interface ProjectQuickNote {
   createdAt: string;
 }
 
+export interface MonthlyGoal {
+  id: string;
+  monthKey: string; // Format "YYYY-MM", ex: "2026-09"
+  title: string;
+  completed: boolean;
+  domain?: DomainId;
+  projectId?: string;
+  notes?: string;
+  createdAt: string;
+}
+
 export interface Project {
   id: string;
   title: string;
