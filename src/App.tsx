@@ -44,6 +44,7 @@ import { InstantSessionModal } from './components/InstantSessionModal';
 import { ImportProgramModal } from './components/ImportProgramModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { NotificationAlertBanner } from './components/NotificationAlertBanner';
+import { GuestModeBanner } from './components/GuestModeBanner';
 import {
   soundSynthesizer,
   isSoundEnabled,
@@ -62,6 +63,8 @@ import {
   Loader2,
   Zap,
 } from 'lucide-react';
+
+const OWNER_EMAIL = 'joelessoh2006@gmail.com';
 
 export default function App() {
   // Splash & Onboarding State
@@ -84,58 +87,23 @@ export default function App() {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  // Data State
-  const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>(() => {
-    try {
-      const cached = localStorage.getItem('spectrum_time_blocks_v2');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (_) {}
-    return [];
-  });
-  const [projects, setProjects] = useState<Project[]>(() => {
-    try {
-      const cached = localStorage.getItem('spectrum_projects_v2');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (_) {}
-    return [];
-  });
-  const [categories, setCategories] = useState<DomainConfig[]>(() => {
-    try {
-      const cached = localStorage.getItem('spectrum_custom_categories');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (_) {}
-    return [];
-  });
+  // Data State - Démarrage propre (les données réelles sont hydratées via Firestore pour le compte existant)
+  const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [categories, setCategories] = useState<DomainConfig[]>([]);
   const [firestoreStatus, setFirestoreStatus] = useState<'connected' | 'error' | 'syncing'>('connected');
 
   // Tâches flottantes (Sas du lendemain & Brain dump sans contrainte horaire)
-  const [floatingTasks, setFloatingTasks] = useState<FloatingTask[]>(() => {
-    try {
-      const cached = localStorage.getItem('spectrum_floating_tasks_v1');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (_) {}
-    return [];
-  });
+  const [floatingTasks, setFloatingTasks] = useState<FloatingTask[]>([]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('spectrum_floating_tasks_v1', JSON.stringify(floatingTasks));
+      const key = user ? `spectrum_floating_tasks_${user.uid}` : 'spectrum_visitor_floating_tasks';
+      localStorage.setItem(key, JSON.stringify(floatingTasks));
     } catch (e) {
       console.warn('Erreur synchronisation localStorage floatingTasks:', e);
     }
-  }, [floatingTasks]);
+  }, [floatingTasks, user]);
 
   const handleAddFloatingTask = (text: string, targetDateStr: string, domainId?: string) => {
     const newTask: FloatingTask = {
@@ -174,64 +142,16 @@ export default function App() {
   };
 
   // Objectifs et Priorités Stratégiques du Mois (Pont entre Projets et Agenda Quotidien)
-  const [monthlyGoals, setMonthlyGoals] = useState<MonthlyGoal[]>(() => {
-    try {
-      const cached = localStorage.getItem('spectrum_monthly_goals_v1');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (_) {}
-
-    // Starter defaults pour le mois courant
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    return [
-      {
-        id: `mg-seed-1`,
-        monthKey: currentMonthKey,
-        title: "Vérifier et valider l'examen final de la formation UVCI",
-        completed: false,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: `mg-seed-2`,
-        monthKey: currentMonthKey,
-        title: "Monter en puissance en Dev Web & Vibe Coding",
-        completed: false,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: `mg-seed-3`,
-        monthKey: currentMonthKey,
-        title: "Finaliser et livrer le site de Marième",
-        completed: false,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: `mg-seed-4`,
-        monthKey: currentMonthKey,
-        title: "Rechercher un stage & élaborer le plan d'action financier",
-        completed: false,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: `mg-seed-5`,
-        monthKey: currentMonthKey,
-        title: "Glow up mental et physique (sommeil, sport & clarté d'esprit)",
-        completed: false,
-        createdAt: new Date().toISOString(),
-      },
-    ];
-  });
+  const [monthlyGoals, setMonthlyGoals] = useState<MonthlyGoal[]>([]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('spectrum_monthly_goals_v1', JSON.stringify(monthlyGoals));
+      const key = user ? `spectrum_monthly_goals_${user.uid}` : 'spectrum_visitor_monthly_goals';
+      localStorage.setItem(key, JSON.stringify(monthlyGoals));
     } catch (e) {
       console.warn('Erreur synchronisation localStorage monthlyGoals:', e);
     }
-  }, [monthlyGoals]);
+  }, [monthlyGoals, user]);
 
   const handleAddMonthlyGoal = (goalData: {
     title: string;
@@ -301,30 +221,33 @@ export default function App() {
     }
   };
 
-  // Miroir de sauvegarde locale pour garantir la résilience contre toute déconnexion ou rafraîchissement
+  // Miroir de sauvegarde locale cloisonné par utilisateur (ou visiteur anonyme)
   useEffect(() => {
     try {
-      localStorage.setItem('spectrum_time_blocks_v2', JSON.stringify(timeBlocks));
+      const key = user ? `spectrum_time_blocks_${user.uid}` : 'spectrum_visitor_time_blocks';
+      localStorage.setItem(key, JSON.stringify(timeBlocks));
     } catch (e) {
       console.warn('Erreur synchronisation localStorage timeBlocks:', e);
     }
-  }, [timeBlocks]);
+  }, [timeBlocks, user]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('spectrum_projects_v2', JSON.stringify(projects));
+      const key = user ? `spectrum_projects_${user.uid}` : 'spectrum_visitor_projects';
+      localStorage.setItem(key, JSON.stringify(projects));
     } catch (e) {
       console.warn('Erreur synchronisation localStorage projects:', e);
     }
-  }, [projects]);
+  }, [projects, user]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('spectrum_custom_categories', JSON.stringify(categories));
+      const key = user ? `spectrum_categories_${user.uid}` : 'spectrum_visitor_categories';
+      localStorage.setItem(key, JSON.stringify(categories));
     } catch (e) {
       console.warn('Erreur synchronisation localStorage categories:', e);
     }
-  }, [categories]);
+  }, [categories, user]);
 
   // Modals
   const [isAddBlockOpen, setIsAddBlockOpen] = useState(false);
@@ -348,6 +271,15 @@ export default function App() {
   useEffect(() => {
     const unsubscribeAuth = onAuthUserChanged(
       (firebaseUser) => {
+        // En cas de changement de compte ou déconnexion, réinitialiser la mémoire
+        // pour garantir qu'aucune donnée de l'ancien utilisateur ne fuite
+        if (firebaseUser?.uid !== user?.uid) {
+          setTimeBlocks([]);
+          setProjects([]);
+          setCategories([]);
+          setMonthlyGoals([]);
+          setFloatingTasks([]);
+        }
         setUser(firebaseUser);
         setIsAuthLoading(false);
       },
@@ -360,7 +292,7 @@ export default function App() {
     return () => {
       unsubscribeAuth();
     };
-  }, []);
+  }, [user?.uid]);
 
   // 2. Détection du premier lancement pour l'onboarding multipotentiel
   useEffect(() => {
@@ -384,16 +316,18 @@ export default function App() {
     }
 
     if (!user) {
-      // Si déconnecté après vérification, préserver la session locale
-      // (NE JAMAIS effacer les blocs importés ni les projets de l'utilisateur)
+      // Session visiteur / invité hors-ligne : espace cloisonné
       try {
-        const cached = localStorage.getItem('spectrum_time_blocks_v2');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setTimeBlocks(parsed);
-          }
-        }
+        const cached = localStorage.getItem('spectrum_visitor_time_blocks');
+        setTimeBlocks(cached ? JSON.parse(cached) : []);
+        const cachedProj = localStorage.getItem('spectrum_visitor_projects');
+        setProjects(cachedProj ? JSON.parse(cachedProj) : []);
+        const cachedCat = localStorage.getItem('spectrum_visitor_categories');
+        setCategories(cachedCat ? JSON.parse(cachedCat) : []);
+        const cachedGoals = localStorage.getItem('spectrum_visitor_monthly_goals');
+        setMonthlyGoals(cachedGoals ? JSON.parse(cachedGoals) : []);
+        const cachedTasks = localStorage.getItem('spectrum_visitor_floating_tasks');
+        setFloatingTasks(cachedTasks ? JSON.parse(cachedTasks) : []);
       } catch (_) {}
       setFirestoreStatus('connected');
       return;
@@ -410,23 +344,31 @@ export default function App() {
       unsubscribeBlocks = subscribeToUserTimeBlocks(
         user.uid,
         (remoteBlocks) => {
-          // Si Firestore est encore vide mais que l'utilisateur a des blocs locaux (ex: importés avant connexion)
+          // Si Firestore est encore vide
           if (remoteBlocks.length === 0) {
-            try {
-              const cached = localStorage.getItem('spectrum_time_blocks_v2');
-              if (cached) {
-                const parsed = JSON.parse(cached);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                  // Sauvegarde automatique des blocs locaux dans Firestore
-                  saveUserTimeBlocksBatch(user.uid, parsed).catch((e) =>
-                    console.warn('Erreur synchronisation initiale blocs vers Firestore:', e)
-                  );
-                  setTimeBlocks(parsed);
-                  setFirestoreStatus('connected');
-                  return;
+            // Seul le compte d'origine (joelessoh2006@gmail.com) peut restaurer son cache de secours
+            if (user.email === OWNER_EMAIL) {
+              try {
+                const cached =
+                  localStorage.getItem(`spectrum_time_blocks_${user.uid}`) ||
+                  localStorage.getItem('spectrum_time_blocks_v2');
+                if (cached) {
+                  const parsed = JSON.parse(cached);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    saveUserTimeBlocksBatch(user.uid, parsed).catch((e) =>
+                      console.warn('Erreur synchronisation initiale blocs vers Firestore:', e)
+                    );
+                    setTimeBlocks(parsed);
+                    setFirestoreStatus('connected');
+                    return;
+                  }
                 }
-              }
-            } catch (_) {}
+              } catch (_) {}
+            }
+            // Pour TOUT AUTRE COMPTE / NOUVEAU COMPTE : remise à zéro stricte
+            setTimeBlocks([]);
+            setFirestoreStatus('connected');
+            return;
           }
 
           // Auto-repair existing blocks (e.g., birthdays forced to 09:00-10:00 or assigned to curiosity)
@@ -509,13 +451,11 @@ export default function App() {
         }
       );
 
-      // Objectifs mensuels de l'utilisateur
+      // Objectifs mensuels de l'utilisateur (remis à zéro pour tout nouveau compte)
       unsubscribeMonthlyGoals = subscribeToUserMonthlyGoals(
         user.uid,
         (remoteGoals) => {
-          if (remoteGoals.length > 0) {
-            setMonthlyGoals(remoteGoals);
-          }
+          setMonthlyGoals(remoteGoals);
         },
         (err) => {
           console.warn('Erreur écoute objectifs mensuels utilisateur:', err);
@@ -565,6 +505,11 @@ export default function App() {
       await signOutUser();
       setSelectedBlockId(null);
       setCurrentView('agenda');
+      setTimeBlocks([]);
+      setProjects([]);
+      setCategories([]);
+      setMonthlyGoals([]);
+      setFloatingTasks([]);
     } catch (err) {
       console.error('Logout error:', err);
     }
@@ -1476,7 +1421,15 @@ export default function App() {
         onSelectBlock={handleOpenBlockFromAlert}
       />
 
-      {/* 3. Message d'erreur d'authentification si popup bloqué */}
+      {/* 3.1. Bannière d'accueil & rappel de sauvegarde Cloud pour visiteurs libres / recruteurs */}
+      {!user && !isAuthLoading && (
+        <GuestModeBanner
+          onLoginWithGoogle={handleLoginWithGoogle}
+          onLoginGuest={handleLoginGuest}
+        />
+      )}
+
+      {/* 3.2. Message d'erreur d'authentification si popup bloqué */}
       {authError && (
         <div className="bg-[#FF7675]/15 border-b border-[#FF7675]/30 px-4 py-2 text-xs text-[#FF7675] flex items-center justify-between">
           <div className="flex items-center gap-2">
