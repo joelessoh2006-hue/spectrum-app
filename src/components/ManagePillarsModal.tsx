@@ -147,11 +147,16 @@ export const ManagePillarsModal: React.FC<ManagePillarsModalProps> = ({
   return (
     <div
       id="manage-pillars-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200"
     >
-      <div className="w-full max-w-2xl bg-[var(--bg-surface)] text-[var(--text-primary)] rounded-3xl border border-[var(--border-card)] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-2xl bg-[var(--bg-surface)] text-[var(--text-primary)] rounded-t-3xl sm:rounded-3xl border-t sm:border border-[var(--border-card)] shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[90vh]">
+        {/* Mobile drag handle */}
+        <div className="pt-2.5 pb-1 flex justify-center sm:hidden bg-[var(--bg-surface-elevated)] shrink-0">
+          <div className="w-12 h-1.5 rounded-full bg-[var(--border-highlight)]" />
+        </div>
+
         {/* Header */}
-        <div className="px-5 sm:px-6 py-4 border-b border-[var(--border-card)] flex items-center justify-between">
+        <div className="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-[var(--border-card)] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#6C5CE7] to-[#00CEC9] p-[1.5px] shadow-sm flex items-center justify-center">
               <div className="w-full h-full bg-[var(--bg-surface)] rounded-[14px] flex items-center justify-center">

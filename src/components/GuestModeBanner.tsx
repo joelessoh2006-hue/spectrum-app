@@ -73,11 +73,11 @@ export const GuestModeBanner: React.FC<GuestModeBannerProps> = ({
         </div>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-2 self-end md:self-center shrink-0 w-full sm:w-auto justify-end flex-wrap">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end shrink-0 pt-1 sm:pt-0">
           <button
             id="guest-banner-google-signin-btn"
             onClick={onLoginWithGoogle}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#6C5CE7] to-[#00CEC9] text-white hover:brightness-110 font-bold text-xs shadow-md shadow-[#6C5CE7]/30 transition active:scale-95 cursor-pointer"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-gradient-to-r from-[#6C5CE7] to-[#00CEC9] text-white hover:brightness-110 font-bold text-xs shadow-md shadow-[#6C5CE7]/30 transition active:scale-95 cursor-pointer"
           >
             <LogIn className="w-3.5 h-3.5" />
             <span>Créer un compte / Connexion</span>
@@ -87,7 +87,7 @@ export const GuestModeBanner: React.FC<GuestModeBannerProps> = ({
           <button
             onClick={handleDismiss}
             aria-label="Fermer ce rappel"
-            className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
+            className="p-2 sm:p-1.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>

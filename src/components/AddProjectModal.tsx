@@ -170,27 +170,32 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
   const selectedCat = activeCategories.find((c) => c.id === domain) || activeCategories[0];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-      <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-3xl w-full max-w-lg p-6 text-[var(--text-primary)] shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between pb-4 border-b border-[var(--border-card)]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
+      <div className="bg-[var(--bg-surface)] border-t sm:border border-[var(--border-card)] rounded-t-3xl sm:rounded-3xl w-full max-w-lg p-5 sm:p-6 text-[var(--text-primary)] shadow-2xl animate-in slide-in-from-bottom sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200 max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto flex flex-col">
+        {/* Mobile drag handle */}
+        <div className="pt-0 pb-2.5 flex justify-center sm:hidden shrink-0">
+          <div className="w-12 h-1.5 rounded-full bg-[var(--border-highlight)]" />
+        </div>
+
+        <div className="flex items-center justify-between pb-3.5 sm:pb-4 border-b border-[var(--border-card)] shrink-0">
           <div className="flex items-center gap-2.5">
             <div
-              className="w-3.5 h-3.5 rounded-full"
+              className="w-3.5 h-3.5 rounded-full shrink-0"
               style={{ backgroundColor: selectedCat?.color || '#6C5CE7' }}
             />
-            <h2 className="text-lg font-bold text-[var(--text-primary)]">
+            <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)]">
               Nouveau Grand Projet (Bento)
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition-colors"
+            className="p-1.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-4 sm:mt-5 space-y-4 flex-1">
           {/* Domain Selection */}
           <div>
             <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">

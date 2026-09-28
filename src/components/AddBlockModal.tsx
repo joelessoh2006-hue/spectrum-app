@@ -497,13 +497,18 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
     };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
-      <div className="bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-3xl w-full max-w-xl my-8 text-[var(--text-primary)] shadow-2xl overflow-hidden transition-all animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
+      <div className="bg-[var(--bg-surface)] border-t sm:border border-[var(--border-card)] rounded-t-3xl sm:rounded-3xl w-full max-w-xl max-h-[92dvh] sm:max-h-[88vh] flex flex-col text-[var(--text-primary)] shadow-2xl overflow-hidden transition-all animate-in slide-in-from-bottom sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200">
+        {/* Mobile drag handle */}
+        <div className="pt-2.5 pb-1 flex justify-center sm:hidden bg-[var(--bg-surface-elevated)] shrink-0">
+          <div className="w-12 h-1.5 rounded-full bg-[var(--border-highlight)]" />
+        </div>
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-card)] bg-[var(--bg-surface-elevated)]">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b border-[var(--border-card)] bg-[var(--bg-surface-elevated)] shrink-0">
           <div className="flex items-center gap-3">
             <div
-              className="w-3.5 h-3.5 rounded-full shadow-sm"
+              className="w-3.5 h-3.5 rounded-full shadow-sm shrink-0"
               style={{ backgroundColor: selectedCategory?.color || '#6C5CE7' }}
             />
             <div>
@@ -525,7 +530,7 @@ export const AddBlockModal: React.FC<AddBlockModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
           {/* Bannière de liaison directe Bento -> Agenda */}
           {initialTitle && (
             <div className="flex items-center gap-3 p-3 rounded-2xl bg-[#6C5CE7]/10 border border-[#6C5CE7]/30 text-xs text-[var(--text-primary)] animate-in fade-in slide-in-from-top-2 duration-200">

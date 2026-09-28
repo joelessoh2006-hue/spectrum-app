@@ -253,7 +253,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
       </div>
 
       {/* Navigation Onglets: Bento Grid vs Réalisations & Victoires vs Blocs de Temps */}
-      <div className="flex flex-wrap items-center gap-2 mt-4 pb-1 border-b border-[var(--border-card)]">
+      <div className="flex items-center gap-2 mt-4 pb-2 border-b border-[var(--border-card)] overflow-x-auto scrollbar-none flex-nowrap sm:flex-wrap -mx-4 px-4 sm:mx-0 sm:px-0">
         <button
           type="button"
           onClick={() => setViewTab('projects')}
@@ -400,7 +400,7 @@ export const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({
           </div>
 
           {/* Filter Tabs */}
-          <div className="flex items-center gap-2 mt-6 overflow-x-auto pb-2 scrollbar-none">
+          <div className="flex items-center gap-2 mt-6 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
             <button
               onClick={() => setPillarFilter('all')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer ${

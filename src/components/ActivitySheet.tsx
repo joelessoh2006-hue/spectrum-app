@@ -671,37 +671,37 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
   return (
     <div className="pb-32 max-w-3xl mx-auto px-4 pt-4 text-[var(--text-primary)] font-['Plus_Jakarta_Sans',sans-serif] space-y-6">
       {/* Top action navigation */}
-      <div className="flex items-center justify-between gap-4 pb-4 border-b border-[var(--border-card)]">
+      <div className="flex items-center justify-between gap-2 pb-3.5 border-b border-[var(--border-card)]">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition active:scale-95 shadow-sm"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-card)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition active:scale-95 shadow-sm shrink-0"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Retour à l'Agenda</span>
+          <span className="hidden xs:inline">Retour</span>
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none">
           {/* BOUTON PLEIN ÉCRAN / ZEN */}
           <button
             type="button"
             id="activity-open-zen-btn"
             onClick={() => setIsImmersionOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#6C5CE7] to-[#A29BFE] text-white text-xs font-bold shadow-md shadow-[#6C5CE7]/25 hover:shadow-lg hover:brightness-105 active:scale-95 transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#6C5CE7] to-[#A29BFE] text-white text-xs font-bold shadow-md shadow-[#6C5CE7]/25 hover:shadow-lg hover:brightness-105 active:scale-95 transition cursor-pointer shrink-0"
             title="Ouvrir le Mode Immersion Plein Écran (Touche F ou Échap pour quitter)"
           >
             <Maximize2 className="w-3.5 h-3.5" />
-            <span>Plein Écran / Zen</span>
+            <span className="hidden sm:inline">Plein Écran / Zen</span>
           </button>
 
           {saveStatus ? (
-            <span className="text-xs font-mono text-[#6C5CE7] flex items-center gap-1.5 bg-[#6C5CE7]/10 px-2.5 py-1 rounded-full border border-[#6C5CE7]/30">
-              <Check className="w-3.5 h-3.5" />
-              {saveStatus}
+            <span className="text-[11px] font-mono text-[#6C5CE7] flex items-center gap-1 bg-[#6C5CE7]/10 px-2 py-1 rounded-full border border-[#6C5CE7]/30 shrink-0">
+              <Check className="w-3 h-3" />
+              <span className="hidden xs:inline">{saveStatus}</span>
             </span>
           ) : (
-            <span className="text-xs font-mono text-[var(--text-muted)] flex items-center gap-1">
+            <span className="text-[11px] font-mono text-[var(--text-muted)] hidden sm:flex items-center gap-1 shrink-0">
               <span className="w-2 h-2 rounded-full bg-[#55E6C1] inline-block" />
-              Firestore Auto-Sync
+              <span>Cloud Sync</span>
             </span>
           )}
 
@@ -709,9 +709,11 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
             <button
               type="button"
               onClick={() => onOpenEditModal(block)}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--bg-surface)] border border-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[#6C5CE7] transition"
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--bg-surface)] border border-[var(--border-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[#6C5CE7] transition shrink-0"
+              title="Modifier ce bloc"
             >
-              Modifier le bloc
+              <span className="hidden sm:inline">Modifier</span>
+              <span className="sm:hidden">Éditer</span>
             </button>
           )}
 
@@ -724,11 +726,11 @@ export const ActivitySheet: React.FC<ActivitySheetProps> = ({
                   onBack();
                 }
               }}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/10 border border-rose-500/25 text-rose-500 hover:bg-rose-500 hover:text-white transition flex items-center gap-1.5 cursor-pointer"
+              className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl text-xs font-semibold bg-rose-500/10 border border-rose-500/25 text-rose-500 hover:bg-rose-500 hover:text-white transition flex items-center gap-1.5 cursor-pointer shrink-0"
               title="Supprimer cette activité"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>Supprimer</span>
+              <span className="hidden sm:inline">Supprimer</span>
             </button>
           )}
         </div>

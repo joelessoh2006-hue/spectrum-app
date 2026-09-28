@@ -1344,7 +1344,7 @@ export default function App() {
   const activeBlock = timeBlocks.find((b) => b.id === selectedBlockId) || null;
 
   return (
-    <div className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)] font-['Plus_Jakarta_Sans',sans-serif] flex flex-col selection:bg-[#6C5CE7]/30 transition-colors">
+    <div className="min-h-[100dvh] overflow-x-hidden bg-[var(--bg-app)] text-[var(--text-primary)] font-['Plus_Jakarta_Sans',sans-serif] flex flex-col selection:bg-[#6C5CE7]/30 transition-colors">
       {/* 0. Indicateur de chargement global pendant la vérification de l'état Auth au démarrage */}
       {isAuthLoading && (
         <div

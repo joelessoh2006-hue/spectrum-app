@@ -117,12 +117,17 @@ export const InstantSessionModal: React.FC<InstantSessionModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn font-['Plus_Jakarta_Sans',sans-serif]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn font-['Plus_Jakarta_Sans',sans-serif]">
       <div
-        className="relative w-full max-w-lg bg-[var(--bg-surface)] border border-[var(--border-card)] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+        className="relative w-full max-w-lg bg-[var(--bg-surface)] border-t sm:border border-[var(--border-card)] rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[90vh]"
         role="dialog"
         aria-modal="true"
       >
+        {/* Mobile drag handle */}
+        <div className="pt-2.5 pb-1 flex justify-center sm:hidden bg-[var(--bg-surface-elevated)] shrink-0">
+          <div className="w-12 h-1.5 rounded-full bg-[var(--border-highlight)]" />
+        </div>
+
         {/* Lueur d'ambiance aux couleurs du pilier actif */}
         <div
           className="absolute -top-16 -right-16 w-56 h-56 rounded-full blur-3xl pointer-events-none opacity-20 transition-all"
@@ -130,7 +135,7 @@ export const InstantSessionModal: React.FC<InstantSessionModalProps> = ({
         />
 
         {/* 1. EN-TÊTE MODAL */}
-        <div className="p-5 sm:p-6 pb-4 border-b border-[var(--border-card)] flex items-start justify-between gap-4">
+        <div className="p-4 sm:p-6 pb-3 sm:pb-4 border-b border-[var(--border-card)] flex items-start justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#6C5CE7] to-[#00CEC9] p-[2px] shadow-md flex items-center justify-center shrink-0">
               <div className="w-full h-full bg-[var(--bg-surface)] rounded-[14px] flex items-center justify-center text-[#6C5CE7]">
